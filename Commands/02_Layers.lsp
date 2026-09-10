@@ -80,5 +80,5 @@
   (princ)
 )
 
-(princ "\n[04_Layers.lsp] Quick layer control commands loaded.")
+(princ "\n[02_Layers.lsp] Quick layer control commands loaded.")
 (princ)

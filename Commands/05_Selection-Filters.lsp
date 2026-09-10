@@ -127,5 +127,5 @@
 (defun c:SW  () (filter-selection "SW"  "WIPEOUT"            T   "Wipeout"))
 (defun c:SWI () (filter-selection "SWI" "WIPEOUT"            nil "Wipeout"))
 
-(princ "\n[07_Selection-Filters.lsp] Smart selection filter engine loaded.")
+(princ "\n[05_Selection-Filters.lsp] Smart selection filter engine loaded.")
 (princ)

@@ -155,14 +155,12 @@
           (setq p1 (list (apply 'min allUcsX) (apply 'min allUcsY) 0.0)
                 p2 (list (apply 'max allUcsX) (apply 'max allUcsY) 0.0))
           (command "._rectang" "_non" p1 "_non" p2)
-          (princ "
-[08_Utilities.lsp] Productivity utilities and system repair tools loaded.")
+          (princ "\n[BBOX] Bounding box rectangle drawn.")
         )
       )
       (vla-endundomark doc)
     )
-    (princ "
-[08_Utilities.lsp] Productivity utilities and system repair tools loaded.")
+    (princ "\n[BBOX] No objects selected.")
   )
   (setvar 'cmdecho oldCmd)
   (princ)
@@ -202,12 +200,10 @@
           (vla-endundomark doc)
           (princ (strcat "\n[CTRANS] Transparency set to " (itoa val) " for " (itoa (sslength ss)) " object(s)."))
         )
-        (princ "
-[08_Utilities.lsp] Productivity utilities and system repair tools loaded.")
+        (princ "\n[CTRANS] Invalid transparency value. Must be between 0 and 90.")
       )
     )
-    (princ "
-[08_Utilities.lsp] Productivity utilities and system repair tools loaded.")
+    (princ "\n[CTRANS] No objects selected.")
   )
   (setvar "CMDECHO" oldCmd)
   (princ)
@@ -240,11 +236,9 @@
       (command "_.MOVE" ss "" '(0 0 0) '(0 0 1e99))
       (command "_.MOVE" ss "" '(0 0 0) '(0 0 -1e99))
       (vla-endundomark doc)
-      (princ "
-[08_Utilities.lsp] Productivity utilities and system repair tools loaded.")
+      (princ (strcat "\n[FL0] " (itoa (sslength ss)) " object(s) flattened to Z=0."))
     )
-    (princ "
-[08_Utilities.lsp] Productivity utilities and system repair tools loaded.")
+    (princ "\n[FL0] No objects found to flatten.")
   )
   (setvar "CMDECHO" oldecho)
   (princ)
@@ -267,18 +261,15 @@
   )
 
   (setvar "CMDECHO" 0)
-  (princ "
-[08_Utilities.lsp] Productivity utilities and system repair tools loaded.")
+  (princ "\n[PUA] Purging all unused blocks, layers, and styles...")
   (command "-PURGE" "ALL" "*" "N")
   (command "-PURGE" "REGAPPS" "*" "N")
   (command "-PURGE" "ZERO" "N")
   (command "-PURGE" "EMPTY" "N")
-  (princ "
-[08_Utilities.lsp] Productivity utilities and system repair tools loaded.")
+  (princ "\n[PUA] Auditing database and fixing errors...")
   (command "_.AUDIT" "Y")
   (setvar "CMDECHO" oldecho)
-  (princ "
-[08_Utilities.lsp] Productivity utilities and system repair tools loaded.")
+  (princ "\n[PUA] Deep purge and audit complete.")
   (princ)
 )
 (defun c:QA () (c:PUA))
@@ -295,8 +286,7 @@
   (setvar "PICKADD" 2)
   (setvar "PICKAUTO" 5)
   (setvar "HIGHLIGHT" 1)
-  (princ "
-[08_Utilities.lsp] Productivity utilities and system repair tools loaded.")
+  (princ "\n[FIXSELECT] Selection environment restored (PICKFIRST=1, PICKADD=2, PICKAUTO=5, HIGHLIGHT=1).")
   (princ)
 )
 
@@ -305,8 +295,7 @@
   (setvar "FILEDIA" 1)
   (setvar "CMDDIA" 1)
   (setvar "ATTDIA" 1)
-  (princ "
-[08_Utilities.lsp] Productivity utilities and system repair tools loaded.")
+  (princ "\n[FIXBOX] Dialog boxes restored (FILEDIA=1, CMDDIA=1, ATTDIA=1).")
   (princ)
 )
 
@@ -322,19 +311,18 @@
   (setvar "CMDECHO" 0)
   (cond
     ((= (getvar "WIPEOUTFRAME") 0)
-     (setvar "WIPEOUTFRAME" 1)
-     (princ "\n[WF] WIPEOUTFRAME = 1 (Display & Plot)"))
+      (setvar "WIPEOUTFRAME" 1)
+      (princ "\n[WF] WIPEOUTFRAME = 1 (Display & Plot)"))
     ((= (getvar "WIPEOUTFRAME") 1)
-     (setvar "WIPEOUTFRAME" 2)
-     (princ "\n[WF] WIPEOUTFRAME = 2 (Display Only, Do Not Plot)"))
+      (setvar "WIPEOUTFRAME" 2)
+      (princ "\n[WF] WIPEOUTFRAME = 2 (Display Only, Do Not Plot)"))
     (t
-     (setvar "WIPEOUTFRAME" 0)
-     (princ "\n[WF] WIPEOUTFRAME = 0 (Frames Hidden)"))
+      (setvar "WIPEOUTFRAME" 0)
+      (princ "\n[WF] WIPEOUTFRAME = 0 (Frames Hidden)"))
   )
   (setvar "CMDECHO" oldecho)
   (princ)
 )
 
-(princ "\n[08_Utilities.lsp] Productivity utilities and system repair tools loaded.")
+(princ "\n[06_Utilities.lsp] Productivity utilities and system repair tools loaded.")
 (princ)
-

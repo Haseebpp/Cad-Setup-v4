@@ -101,8 +101,7 @@
       (vla-endundomark doc)
       (princ (strcat "\n[CB] Block created: \"" blkName "\" at Bottom-Left base point."))
     )
-    (princ "
-[05_Blocks.lsp] Block creation and transform tools loaded (CB, OB, RB, RBH, RBV).")
+    (princ "\n[CB] No objects selected.")
   )
 
   (setvar 'attreq oldAtt)
@@ -169,8 +168,7 @@
       (vla-endundomark doc)
       (princ (strcat "\n[OB] Block created: \"" blkName "\" at Origin (0,0,0)."))
     )
-    (princ "
-[05_Blocks.lsp] Block creation and transform tools loaded (CB, OB, RB, RBH, RBV).")
+    (princ "\n[OB] No objects selected.")
   )
 
   (setvar 'attreq oldAtt)
@@ -259,5 +257,5 @@
 (defun c:RBH () (_ExecTransform 'FLIP_H))
 (defun c:RBV () (_ExecTransform 'FLIP_V))
 
-(princ "\n[05_Blocks.lsp] Block creation and transform tools loaded (CB, OB, RB, RBH, RBV).")
+(princ "\n[03_Blocks.lsp] Block creation and transform tools loaded (CB, OB, RB, RBH, RBV).")
 (princ)

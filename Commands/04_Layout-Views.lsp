@@ -126,5 +126,5 @@
   (princ)
 )
 
-(princ "\n[06_Layout-Views.lsp] View navigation, dimensions, and layout tools loaded.")
+(princ "\n[04_Layout-Views.lsp] View navigation, dimensions, and layout tools loaded.")
 (princ)

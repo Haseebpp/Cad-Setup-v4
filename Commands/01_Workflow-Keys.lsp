@@ -335,5 +335,5 @@
 (defun c:4 () (c:ML))
 
 
-(princ "\n[03_Workflow-Keys.lsp] Workflow keys (1=HL, 2=VP, 3=GL, 4=ML) loaded.")
+(princ "\n[01_Workflow-Keys.lsp] Workflow keys (1=HL, 2=VP, 3=GL, 4=ML) loaded.")
 (princ)

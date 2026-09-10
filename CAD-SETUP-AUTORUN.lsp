@@ -7,7 +7,7 @@
 (vl-load-com)
 
 ;; ===========================================================================
-;; 1. PROJECT DIRECTORY CONFIGURATION (MANUAL PATH)
+;; PROJECT DIRECTORY CONFIGURATION (MANUAL PATH)
 ;; ===========================================================================
 
 ;; Set your project directory path manually below:
@@ -36,7 +36,7 @@
 )
 
 ;; ===========================================================================
-;; 2. MODULAR COMMAND SUITE LOADER
+;; MODULAR COMMAND SUITE LOADER
 ;; ===========================================================================
 
 ;; Core function: Discovers and loads all .lsp files in "Commands" folder
@@ -98,7 +98,7 @@
 (defun c:RCS () (LOAD-COMMANDS))
 
 ;; ===========================================================================
-;; 3. CORE DRAWING INITIALIZATION ROUTINE (AUTORUN)
+;; CORE DRAWING INITIALIZATION ROUTINE (AUTORUN)
 ;; ===========================================================================
 
 (defun CadSetup:Initialize ( / *error* acadApp doc mSpace layersLts
@@ -134,19 +134,7 @@
   (princ "\nInitialising advanced production palette...")
 
   ;; -------------------------------------------------------------------------
-  ;; A. DRAWING UNITS & INSERTION SCALE (Millimeters)
-  ;; -------------------------------------------------------------------------
-  (setvar "INSUNITS" 4)       ; 4 = Millimeters (prevents scaling chaos on XREF insert)
-  (setvar "MEASUREMENT" 1)    ; 1 = Metric standards
-  (setvar "LUNITS" 2)         ; 2 = Decimal units
-  (setvar "LUPREC" 1)         ; 1 = Display precision (0.0 mm)
-  (setvar "AUNITS" 0)         ; 0 = Decimal degrees
-  (setvar "AUPREC" 2)         ; 2 = Display angular precision (0.00)
-  (setvar "ANGDIR" 0)         ; 0 = Counter-clockwise angle calculation
-  (setvar "ANGBASE" 0.0)      ; 0.0 = 0° East base angle
-
-  ;; -------------------------------------------------------------------------
-  ;; B. LOAD LINETYPES SAFELY
+  ;; A. LOAD LINETYPES SAFELY
   ;; -------------------------------------------------------------------------
   (setq linFile (if (= (getvar "MEASUREMENT") 0) "acad.lin" "acadiso.lin"))
   (foreach lt '(
@@ -318,7 +306,7 @@
   )
 
   ;; -------------------------------------------------------------------------
-  ;; C. TYPOGRAPHY (Annotative & Scalable)
+  ;; B. TYPOGRAPHY (Annotative & Scalable)
   ;; -------------------------------------------------------------------------
   (if (not (tblsearch "style" "ARCH-TEXT"))
     (command "-style" "ARCH-TEXT" "arial.ttf" "0.0" "1.0" "0" "_N" "_N")
@@ -328,7 +316,7 @@
   )
 
   ;; -------------------------------------------------------------------------
-  ;; D. ANNOTATIVE DIMENSION STYLES
+  ;; C. ANNOTATIVE DIMENSION STYLES
   ;; -------------------------------------------------------------------------
   (setvar "DIMTXSTY" "ARCH-TEXT")
   (setvar "DIMTXT"   2.5)         ; Plotted height = 2.5 mm
@@ -347,7 +335,7 @@
   (setvar "DIMLWE"   18)          ; 0.18 mm
   (setvar "DIMTOFL"  1)           ; Force line between points
 
-  ;; D1. Save ARCH-TICK (Annotative)
+  ;; C1. Save ARCH-TICK (Annotative)
   (setvar "DIMBLK" "_ArchTick")
   (setvar "DIMASZ" 1.5)
   (if (tblsearch "dimstyle" "ARCH-TICK")
@@ -355,7 +343,7 @@
     (command "-dimstyle" "_save" "ARCH-TICK")
   )
 
-  ;; D2. Save ARCH-ARROW (Annotative)
+  ;; C2. Save ARCH-ARROW (Annotative)
   (setvar "DIMBLK" ".")           ; Closed Filled Arrow
   (setvar "DIMASZ" 2.2)
   (if (tblsearch "dimstyle" "ARCH-ARROW")
@@ -366,7 +354,7 @@
   (command "-dimstyle" "_restore" "ARCH-TICK")
 
   ;; -------------------------------------------------------------------------
-  ;; E. ENVIRONMENT CONFIGURATION & COMMAND SUITES
+  ;; D. ENVIRONMENT CONFIGURATION & COMMAND SUITES
   ;; -------------------------------------------------------------------------
   
   ;; Set current drawing layer 

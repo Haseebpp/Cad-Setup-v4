@@ -15,7 +15,19 @@
 )
 
 ;;; --------------------------------------------------------------------------
-;;; 1. CORE DRAFTING & SELECTION BEHAVIOR
+;;; 1. DRAWING UNITS & INSERTION SCALE (Millimeters)
+;;; --------------------------------------------------------------------------
+(SetSysVar "INSUNITS"          4)   ; 4 = Millimeters (prevents scaling chaos on XREF insert)
+(SetSysVar "MEASUREMENT"       1)   ; 1 = Metric standards
+(SetSysVar "LUNITS"            2)   ; 2 = Decimal units
+(SetSysVar "LUPREC"            1)   ; 1 = Display precision (0.0 mm)
+(SetSysVar "AUNITS"            0)   ; 0 = Decimal degrees
+(SetSysVar "AUPREC"            2)   ; 2 = Display angular precision (0.00)
+(SetSysVar "ANGDIR"            0)   ; 0 = Counter-clockwise angle calculation
+(SetSysVar "ANGBASE"         0.0)   ; 0.0 = 0° East base angle
+
+;;; --------------------------------------------------------------------------
+;;; 2. CORE DRAFTING & SELECTION BEHAVIOR
 ;;; --------------------------------------------------------------------------
 (SetSysVar "CMDECHO"          0)    ; Suppress command line echoes during routine execution
 (SetSysVar "PICKFIRST"        1)    ; Enable noun/verb selection (select before command)
@@ -30,7 +42,7 @@
 (SetSysVar "SNAPSTYLE"        0)    ; Standard 2D rectangular grid
 
 ;;; --------------------------------------------------------------------------
-;;; 2. CURSOR ERGONOMICS & SIZING
+;;; 3. CURSOR ERGONOMICS & SIZING
 ;;; --------------------------------------------------------------------------
 (SetSysVar "CURSORSIZE"      25)    ; Full-screen crosshair (25%)
 (SetSysVar "PICKBOX"          6)    ; Object selection target box size (6 px)
@@ -38,7 +50,7 @@
 (SetSysVar "APERTURE"        10)    ; Object snap target box aperture (10 px)
 
 ;;; --------------------------------------------------------------------------
-;;; 3. SNAPS, GRID & DRAFTING TOGGLES
+;;; 4. SNAPS, GRID & DRAFTING TOGGLES
 ;;; --------------------------------------------------------------------------
 (SetSysVar "OSMODE"        2215)    ; Standard 2D drafting snap suite (End, Mid, Cen, Int, Perp, Ext)
 (SetSysVar "OSOPTIONS"        7)    ; Suppress OSNAP on hatches and underlays (speeds up snapping)
@@ -47,7 +59,7 @@
 (SetSysVar "ORTHOMODE"        1)    ; Orthographic constraint ON
 
 ;;; --------------------------------------------------------------------------
-;;; 4. DISPLAY, LINETYPES & ENTITY DEFAULTS
+;;; 5. DISPLAY, LINETYPES & ENTITY DEFAULTS
 ;;; --------------------------------------------------------------------------
 (SetSysVar "LWDISPLAY"           0) ; Default lineweight display off for performance
 (SetSysVar "TRANSPARENCYDISPLAY" 1) ; Show layer transparency
@@ -62,7 +74,7 @@
 (SetSysVar "LAYLOCKFADECTL"     50) ; 50% fade on locked layers for contrast
 
 ;;; --------------------------------------------------------------------------
-;;; 5. PERFORMANCE & VISUAL OPTIMIZATION
+;;; 6. PERFORMANCE & VISUAL OPTIMIZATION
 ;;; --------------------------------------------------------------------------
 (SetSysVar "SELECTIONPREVIEW"    3) ; Preview selection under cursor
 (SetSysVar "HPQUICKPREVIEW"      0) ; Disable laggy hatch hover preview on dense drawings

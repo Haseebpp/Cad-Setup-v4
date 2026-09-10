@@ -102,7 +102,7 @@
 ;; ===========================================================================
 
 (defun CadSetup:Initialize ( / *error* acadApp doc mSpace layersLts
-                               oldCmdecho oldOsmode oldClayer dataList 
+                               dataList 
                                row lName lCol lPlotCol lType lWt lPlot lHatch lHScale lHRot lTrans lLocked lDesc
                                layObj LoadLinetype linFile lt )
 
@@ -116,18 +116,10 @@
         mSpace    (if doc (vla-get-modelspace doc))
         layersLts (if doc (vla-get-linetypes doc)))
 
-  ;; Cache Original System Variables (runtime state only)
-  (setq oldCmdecho   (getvar "CMDECHO")
-        oldOsmode    (getvar "OSMODE")
-        oldClayer    (getvar "CLAYER"))
-
   ;; ----------------------------------------------------------------------------
   ;; ERROR HANDLER & UNDO MARK (Scoped locally to avoid altering global handler)
   ;; ----------------------------------------------------------------------------
   (defun *error* (msg)
-    (if oldCmdecho   (setvar "CMDECHO"   oldCmdecho))
-    (if oldOsmode    (setvar "OSMODE"    oldOsmode))
-    (if oldClayer    (if (tblsearch "LAYER" oldClayer) (setvar "CLAYER" oldClayer)))
     (if doc (vl-catch-all-apply 'vla-endundomark (list doc)))
     (if (and msg (not (wcmatch (strcase msg) "*CANCEL*,*QUIT*")))
       (princ (strcat "\nError: " msg))
@@ -376,13 +368,18 @@
   ;; -------------------------------------------------------------------------
   ;; E. ENVIRONMENT CONFIGURATION & COMMAND SUITES
   ;; -------------------------------------------------------------------------
-  ;; Set current drawing layer safely (fallback to 0 if not found)
+  
+  ;; Set current drawing layer 
   (if (tblsearch "LAYER" "R-LINE-VISB")
     (setvar "CLAYER" "R-LINE-VISB")
-    (if (and oldClayer (tblsearch "LAYER" oldClayer))
-      (setvar "CLAYER" oldClayer)
-      (setvar "CLAYER" "0")
-    )
+  )
+
+  ;; Route default dimensions & hatches to standard production layers
+  (if (and (getvar "DIMLAYER") (tblsearch "LAYER" "R-ANNO-DIMS"))
+    (setvar "DIMLAYER" "R-ANNO-DIMS")
+  )
+  (if (and (getvar "HPLAYER") (tblsearch "LAYER" "R-HTCH-GENR"))
+    (setvar "HPLAYER" "R-HTCH-GENR")
   )
 
   ;; Load Custom Command Suites (Priority-ordered execution from 00 to 99)

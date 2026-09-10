@@ -11,11 +11,11 @@
 ;;;   restoration of the drafter's previous active layer upon completion or Esc.
 ;;;
 ;;; KEY MAPPINGS:
-;;;   [1] / HL : Help Line (Draws on "1-HELP-LINE", restores previous layer)
-;;;   [2] / VP : Viewport Boundary (Draws frame on "2-VIEW-PORT", generates
+;;;   [1] / HL : Help Line (Draws on "01-HELP-LINE", restores previous layer)
+;;;   [2] / VP : Viewport Boundary (Draws frame on "02-VIEW-PORT", generates
 ;;;              dynamic ISO A3 scale, title & metadata MText, center snap node)
-;;;   [3] / GL : Grid Line (Draws on "3-GRID-LINE", restores previous layer)
-;;;   [4] / ML : Material Line (Draws on "4-MAT-LINE", restores previous layer)
+;;;   [3] / GL : Grid Line (Draws on "03-GRID-LINE", restores previous layer)
+;;;   [4] / ML : Material Line (Draws on "MATERIAL-LINE", restores previous layer)
 ;;;
 ;;; ==========================================================================
 
@@ -25,17 +25,17 @@
 ;;; 0. WORKFLOW LAYER CONFIGURATION
 ;;; --------------------------------------------------------------------------
 ;; Layer names can be customized here to match any drawing template/standard:
-(setq *WF-LAYER-HL* "1-HELP-LINE")     ;; Key 1: Construction / Help Line
-(setq *WF-LAYER-VP* "2-VIEW-PORT")     ;; Key 2: Viewport Boundary & Metadata
-(setq *WF-LAYER-GL* "3-GRID-LINE")     ;; Key 3: Structural / Layout Grid Line
-(setq *WF-LAYER-ML* "4-MAT-LINE")      ;; Key 4: Material / Profile Line
+(setq *WF-LAYER-HL* "01-HELP-LINE")     ;; Key 1: Construction / Help Line
+(setq *WF-LAYER-VP* "02-VIEW-PORT")     ;; Key 2: Viewport Boundary & Metadata
+(setq *WF-LAYER-GL* "03-GRID-LINE")     ;; Key 3: Structural / Layout Grid Line
+(setq *WF-LAYER-ML* "MATERIAL-LINE")      ;; Key 4: Material / Profile Line
 
 
 ;;; --------------------------------------------------------------------------
 ;;; 1. HELP LINE / CONSTRUCTION LINE (1 / HL)
 ;;; --------------------------------------------------------------------------
 (defun c:HL ( / *error* oldLayer oldEcho lay )
-  (setq lay (if *WF-LAYER-HL* *WF-LAYER-HL* "1-HELP-LINE"))
+  (setq lay (if *WF-LAYER-HL* *WF-LAYER-HL* "01-HELP-LINE"))
 
   ;; Local error handler to restore settings if canceled via Esc
   (defun *error* (msg)
@@ -83,7 +83,7 @@
                 vpName cdate dotPos dPart tPart dtStr areaStr ratioStr scVal refScStr
                 midX midY lay )
 
-  (setq lay (if *WF-LAYER-VP* *WF-LAYER-VP* "2-VIEW-PORT"))
+  (setq lay (if *WF-LAYER-VP* *WF-LAYER-VP* "02-VIEW-PORT"))
 
   ;; Local error handler
   (defun *error* (msg)
@@ -251,7 +251,7 @@
 ;;; 3. GRID LINE (3 / GL)
 ;;; --------------------------------------------------------------------------
 (defun c:GL ( / *error* oldLayer oldEcho lay )
-  (setq lay (if *WF-LAYER-GL* *WF-LAYER-GL* "3-GRID-LINE"))
+  (setq lay (if *WF-LAYER-GL* *WF-LAYER-GL* "03-GRID-LINE"))
 
   ;; Local error handler to restore settings if canceled via Esc
   (defun *error* (msg)
@@ -295,7 +295,7 @@
 ;;; 4. MATERIAL LINE (4 / ML)
 ;;; --------------------------------------------------------------------------
 (defun c:ML ( / *error* oldLayer oldEcho lay )
-  (setq lay (if *WF-LAYER-ML* *WF-LAYER-ML* "4-MAT-LINE"))
+  (setq lay (if *WF-LAYER-ML* *WF-LAYER-ML* "MATERIAL-LINE"))
 
   ;; Local error handler to restore settings if canceled via Esc
   (defun *error* (msg)

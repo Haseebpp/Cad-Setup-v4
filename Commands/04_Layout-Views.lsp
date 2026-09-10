@@ -1,17 +1,11 @@
 ;;; ==========================================================================
-;;; LAYOUT-VIEWS.LSP - Zoom, Views, Annotation Shortcuts & Layout Presentation
+;;; 04_Layout-Views.lsp - Zoom, Views, Annotation Shortcuts & Layout Presentation
 ;;; ==========================================================================
 ;;; Category : View Navigation, Annotations & Layout Setup
 ;;; Author   : Haseeb
 ;;; ==========================================================================
 
 (vl-load-com)
-
-;;; --------------------------------------------------------------------------
-;;; NOTE: Single-line view, zoom, dimension, and object isolation shortcuts
-;;; (ZE, ZZ, ZW, ZP, ZS, RE, REA, DD, DA, DR, DDI, DAN, DC, DE, TE, IS, HO, UN)
-;;; have been consolidated into Commands/99_Aliases.lsp for easy customization.
-;;; --------------------------------------------------------------------------
 
 ;;; --------------------------------------------------------------------------
 ;;; 1. PRESENTATION THEME SWITCHER (LB)

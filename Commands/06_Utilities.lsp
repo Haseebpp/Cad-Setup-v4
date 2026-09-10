@@ -1,5 +1,5 @@
 ;;; ==========================================================================
-;;; UTILITIES.LSP - Drawing Cleanup, Measurement, System Fixes & Utilities
+;;; 06_Utilities.lsp - Drawing Cleanup, Measurement, System Fixes & Utilities
 ;;; ==========================================================================
 ;;; Category : Drawing Management & Productivity Aids
 ;;; Author   : Haseeb

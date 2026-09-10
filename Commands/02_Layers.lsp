@@ -1,5 +1,5 @@
 ;;; ==========================================================================
-;;; LAYERS.LSP - Lightning-Fast Layer Management Shortcuts & Utilities
+;;; 02_Layers.lsp - Lightning-Fast Layer Management Shortcuts & Utilities
 ;;; ==========================================================================
 ;;; Category : Layer Operations
 ;;; Author   : Haseeb
@@ -8,55 +8,7 @@
 (vl-load-com)
 
 ;;; --------------------------------------------------------------------------
-;;; 1. LAYER ISOLATION & GLOBAL RESTORATION
-;;; --------------------------------------------------------------------------
-;;; Note: Direct single-line layer aliases (11, LO, 44, LON, 55, LF, 66, LTH,
-;;; LAYC, LM, LLK, LUK) are centralized in Commands/99_Aliases.lsp.
-
-;; 22 or LI : Layer Isolate (Viewport-safe isolation)
-(defun c:22 (/ *error* oldCmd)
-  (setq oldCmd (getvar "CMDECHO"))
-  (defun *error* (msg)
-    (if oldCmd (setvar "CMDECHO" oldCmd))
-    (princ)
-  )
-  (setvar "CMDECHO" 0)
-  (command "_.LAYISO")
-  (setvar "CMDECHO" oldCmd)
-  (princ)
-)
-(defun c:LI () (c:22))
-
-;; 33 or LU : Layer Unisolate (Restore isolated layers)
-(defun c:33 (/ *error* oldCmd)
-  (setq oldCmd (getvar "CMDECHO"))
-  (defun *error* (msg)
-    (if oldCmd (setvar "CMDECHO" oldCmd))
-    (princ)
-  )
-  (setvar "CMDECHO" 0)
-  (command "_.LAYUNISO")
-  (setvar "CMDECHO" oldCmd)
-  (princ)
-)
-(defun c:LU () (c:33))
-
-;; LALL : Thaw ALL layers and turn ALL layers ON in one step
-(defun c:LALL (/ *error* oldCmd)
-  (setq oldCmd (getvar "CMDECHO"))
-  (defun *error* (msg)
-    (if oldCmd (setvar "CMDECHO" oldCmd))
-    (princ)
-  )
-  (setvar "CMDECHO" 0)
-  (command "_.LAYER" "_thaw" "*" "_on" "*" "")
-  (setvar "CMDECHO" oldCmd)
-  (princ "\n[LALL] All layers thawed and turned ON.")
-  (princ)
-)
-
-;;; --------------------------------------------------------------------------
-;;; 2. LAYER SELECTION & STATE TOOLS
+;;; LAYER SELECTION & STATE TOOLS
 ;;; --------------------------------------------------------------------------
 
 ;; L0 : Switch active layer to "0" immediately

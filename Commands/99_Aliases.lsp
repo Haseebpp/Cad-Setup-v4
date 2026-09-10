@@ -28,7 +28,7 @@
 
 ;;; --- TRANSFORM & ARRANGE --------------------------------------------------
 (defun c:V   () (command "_.MOVE")       (princ)) ; V   -> Move objects
-(defun c:VP  () (command "_.MOVE" "_P" "")(princ)); VP  -> Move previously selected set
+(defun c:MP  () (command "_.MOVE" "_P" "")(princ)); VP  -> Move previously selected set
 (defun c:C   () (command "_.COPY")       (princ)) ; C   -> Copy objects
 (defun c:CP  () (command "_.COPY" "_P" "")(princ)); CP  -> Copy previously selected set
 (defun c:RR  () (command "_.ROTATE")     (princ)) ; RR  -> Rotate objects around a basepoint
@@ -44,7 +44,7 @@
 (defun c:SCR (/ ss) (if (setq ss (ssget)) (command "_.SCALE"  ss "" pause "_R")) (princ)) ; SCR -> Scale by Reference length
 (defun c:BF  (/ ss) (if (setq ss (ssget)) (command "_.DRAWORDER" ss "" "_F"))    (princ)) ; BF  -> Draw Order: Bring to absolute Front
 (defun c:BB  (/ ss) (if (setq ss (ssget)) (command "_.DRAWORDER" ss "" "_B"))    (princ)) ; BB  -> Draw Order: Send to absolute Back
-(defun c:ME  (/ ss p1 p2)                                                                  ; ME  -> Mirror and erase source objects
+(defun c:ME  (/ ss p1 p2)                                                                 ; ME  -> Mirror and erase source objects
   (if (and (setq ss (ssget)) 
            (setq p1 (getpoint "\nSpecify 1st point of mirror axis: ")) 
            (setq p2 (getpoint p1 "\nSpecify 2nd point of mirror axis: ")))

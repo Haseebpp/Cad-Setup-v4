@@ -39,7 +39,7 @@
   (princ)
 )
 
-;; Note: T (MEASUREGEOM QUICK) alias is maintained in Commands/Aliases-Min.lsp
+;; Note: T (MEASUREGEOM QUICK) alias is maintained in Commands/99_Aliases.lsp
 
 ;;; --------------------------------------------------------------------------
 ;;; 2. SMART DUPLICATION & BOUNDING BOX
@@ -283,7 +283,7 @@
 )
 (defun c:QA () (c:PUA))
 
-;; Note: QS (QSAVE) and CL (CLOSE) aliases are maintained in Commands/Aliases-Min.lsp
+;; Note: QS (QSAVE) and CL (CLOSE) aliases are maintained in Commands/99_Aliases.lsp
 
 ;;; --------------------------------------------------------------------------
 ;;; 5. SYSTEM REPAIR & ENVIRONMENT FIXES

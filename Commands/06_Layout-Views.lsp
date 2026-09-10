@@ -10,7 +10,7 @@
 ;;; --------------------------------------------------------------------------
 ;;; NOTE: Single-line view, zoom, dimension, and object isolation shortcuts
 ;;; (ZE, ZZ, ZW, ZP, ZS, RE, REA, DD, DA, DR, DDI, DAN, DC, DE, TE, IS, HO, UN)
-;;; have been consolidated into Commands/Aliases-Min.lsp for easy customization.
+;;; have been consolidated into Commands/99_Aliases.lsp for easy customization.
 ;;; --------------------------------------------------------------------------
 
 ;;; --------------------------------------------------------------------------

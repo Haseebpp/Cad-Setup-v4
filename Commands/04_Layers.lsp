@@ -11,7 +11,7 @@
 ;;; 1. LAYER ISOLATION & GLOBAL RESTORATION
 ;;; --------------------------------------------------------------------------
 ;;; Note: Direct single-line layer aliases (11, LO, 44, LON, 55, LF, 66, LTH,
-;;; LAYC, LM, LLK, LUK) are centralized in Commands/Aliases-Min.lsp.
+;;; LAYC, LM, LLK, LUK) are centralized in Commands/99_Aliases.lsp.
 
 ;; 22 or LI : Layer Isolate (Viewport-safe isolation)
 (defun c:22 (/ *error* oldCmd)

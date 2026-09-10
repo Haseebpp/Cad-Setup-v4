@@ -1,12 +1,121 @@
 ;;; ==========================================================================
-;;; CAD-SETUP.LSP - Production Architectural & Fitout Drafting System
-;;; Commands     : CAD-SETUP, CADSETUP, LOAD-COMMAND, LOAD-COMMANDS
+;;; CAD-SETUP-AUTORUN.lsp - Production Architectural & Fitout Drafting System
+;;; Automatic Initialization File for AutoCAD APPLOAD / Startup Suite
+;;; Commands     : RELOAD-COMMAND-SUITES (Alias: RCS, LOAD-COMMAND, LOAD-COMMANDS)
 ;;; ==========================================================================
 
-(defun c:CAD-SETUP ( / *error* acadApp doc mSpace layersLts
-                      oldCmdecho oldOsmode oldClayer dataList 
-                      row lName lCol lPlotCol lType lWt lPlot lHatch lHScale lHRot lTrans lLocked lDesc
-                      layObj LoadLinetype linFile lt)
+(vl-load-com)
+
+;; ===========================================================================
+;; 1. PROJECT DIRECTORY CONFIGURATION (MANUAL PATH)
+;; ===========================================================================
+
+;; Set your project directory path manually below:
+(setq *CAD-SETUP-DIR* "D:\\Cad-Setup-v3")
+
+;; Helper: Retrieve project directory
+;; Uses *CAD-SETUP-DIR*, or the folder containing CAD-SETUP-AUTORUN.lsp
+(defun CadSetup:GetDir ( / p )
+  (cond
+    ;; 1. Configured manual path (trimmed of trailing slashes)
+    ((and (boundp '*CAD-SETUP-DIR*)
+          *CAD-SETUP-DIR*
+          (= (type *CAD-SETUP-DIR*) 'STR)
+          (vl-file-directory-p (vl-string-right-trim "\\/" *CAD-SETUP-DIR*)))
+     (vl-string-right-trim "\\/" *CAD-SETUP-DIR*))
+
+    ;; 2. Folder containing CAD-SETUP-AUTORUN.lsp (Commands folder is always beside it)
+    ((and (setq p (findfile "CAD-SETUP-AUTORUN.lsp"))
+          (setq p (vl-filename-directory p))
+          (vl-file-directory-p p))
+     p)
+
+    ;; 3. Default fallback
+    (t "D:\\Cad-Setup-v3")
+  )
+)
+
+;; ===========================================================================
+;; 2. MODULAR COMMAND SUITE LOADER
+;; ===========================================================================
+
+;; Core function: Discovers and loads all .lsp files in "Commands" folder
+(defun Reload-Command-Suites ( / baseDir cmdDir lspFiles fName fullPath loadedCount failedCount res )
+  (vl-load-com)
+  (setq baseDir (CadSetup:GetDir))
+
+  (if (and baseDir (vl-file-directory-p baseDir))
+    (progn
+      (setq cmdDir (strcat baseDir "\\Commands"))
+
+      (if (and cmdDir (vl-file-directory-p cmdDir))
+        (progn
+          ;; Discover and sort files ascending (00 -> 99)
+          (setq lspFiles (vl-directory-files cmdDir "*.lsp" 1))
+          (setq lspFiles (vl-sort lspFiles (function (lambda (a b) (< (strcase a) (strcase b))))))
+          (setq loadedCount 0
+                failedCount 0)
+
+          (princ "\n------------------------------------------------------------")
+          (princ (strcat "\n[Commands] Loading modular drafting suites from: " cmdDir))
+          (princ "\n[Commands] Priority-ordered execution (Low -> High / 00 -> 99)...")
+          (princ "\n------------------------------------------------------------")
+
+          (while lspFiles
+            (setq fName    (car lspFiles)
+                  lspFiles (cdr lspFiles)
+                  fullPath (strcat cmdDir "\\" fName))
+            (setq res (vl-catch-all-apply 'load (list fullPath)))
+            (if (vl-catch-all-error-p res)
+              (progn
+                (setq failedCount (1+ failedCount))
+                (princ (strcat "\n [X] Failed: " fName " -> " (vl-catch-all-error-message res)))
+              )
+              (progn
+                (setq loadedCount (1+ loadedCount))
+                (princ (strcat "\n [✓] Loaded: " fName))
+              )
+            )
+          )
+
+          (princ "\n------------------------------------------------------------")
+          (princ (strcat "\n[Commands] Complete: " (itoa loadedCount) " suite(s) loaded successfully."))
+          (if (> failedCount 0)
+            (princ (strcat "\n[Commands] Warning: " (itoa failedCount) " suite(s) encountered errors."))
+          )
+          (princ "\n------------------------------------------------------------\n")
+        )
+        (princ (strcat "\n[Commands] Error: Directory '" cmdDir "' not found.\n"))
+      )
+
+      ;; Autoload CAD-SETTINGS dialog manager if present in project directory
+      (if (findfile (strcat baseDir "\\CAD-SETTINGS.lsp"))
+        (autoload (strcat baseDir "\\CAD-SETTINGS.lsp") '("CAD-SETTINGS" "CADSETTINGS"))
+      )
+    )
+    (princ (strcat "\n[Commands] Error: Base directory '" (vl-princ-to-string baseDir) "' not found.\n"))
+  )
+  (princ)
+)
+
+;; AutoCAD Command Aliases (type without parentheses at AutoCAD command line)
+(defun c:RELOAD-COMMAND-SUITES () (Reload-Command-Suites))
+(defun c:RCS () (Reload-Command-Suites))
+(defun c:LOAD-COMMAND () (Reload-Command-Suites))
+(defun c:LOAD-COMMANDS () (Reload-Command-Suites))
+
+;; LISP Function Wrappers (runnable like (RELOAD-COMMAND-SUITES) or (RCS))
+(defun RELOAD-COMMAND-SUITES () (Reload-Command-Suites))
+(defun RCS () (Reload-Command-Suites))
+
+;; ===========================================================================
+;; 3. CORE DRAWING INITIALIZATION ROUTINE (AUTORUN)
+;; ===========================================================================
+
+(defun CadSetup:Initialize ( / *error* acadApp doc mSpace layersLts
+                               oldCmdecho oldOsmode oldClayer dataList 
+                               row lName lCol lPlotCol lType lWt lPlot lHatch lHScale lHRot lTrans lLocked lDesc
+                               layObj LoadLinetype linFile lt )
 
   (vl-load-com)
 
@@ -24,7 +133,7 @@
         oldClayer    (getvar "CLAYER"))
 
   ;; ----------------------------------------------------------------------------
-  ;; ERROR HANDLER & UNDO MARK
+  ;; ERROR HANDLER & UNDO MARK (Scoped locally to avoid altering global handler)
   ;; ----------------------------------------------------------------------------
   (defun *error* (msg)
     (if oldCmdecho   (setvar "CMDECHO"   oldCmdecho))
@@ -44,7 +153,7 @@
   (princ "\nInitialising advanced production palette...")
 
   ;; -------------------------------------------------------------------------
-  ;; 1. DRAWING UNITS & INSERTION SCALE (Millimeters)
+  ;; A. DRAWING UNITS & INSERTION SCALE (Millimeters)
   ;; -------------------------------------------------------------------------
   (setvar "INSUNITS" 4)       ; 4 = Millimeters (prevents scaling chaos on XREF insert)
   (setvar "MEASUREMENT" 1)    ; 1 = Metric standards
@@ -56,7 +165,7 @@
   (setvar "ANGBASE" 0.0)      ; 0.0 = 0° East base angle
 
   ;; -------------------------------------------------------------------------
-  ;; 2. LOAD LINETYPES SAFELY
+  ;; B. LOAD LINETYPES SAFELY
   ;; -------------------------------------------------------------------------
   (setq linFile (if (= (getvar "MEASUREMENT") 0) "acad.lin" "acadiso.lin"))
   (foreach lt '(
@@ -228,7 +337,7 @@
   )
 
   ;; -------------------------------------------------------------------------
-  ;; 4. TYPOGRAPHY (Annotative & Scalable)
+  ;; C. TYPOGRAPHY (Annotative & Scalable)
   ;; -------------------------------------------------------------------------
   (if (not (tblsearch "style" "ARCH-TEXT"))
     (command "-style" "ARCH-TEXT" "arial.ttf" "0.0" "1.0" "0" "_N" "_N")
@@ -238,7 +347,7 @@
   )
 
   ;; -------------------------------------------------------------------------
-  ;; 5. ANNOTATIVE DIMENSION STYLES
+  ;; D. ANNOTATIVE DIMENSION STYLES
   ;; -------------------------------------------------------------------------
   (setvar "DIMTXSTY" "ARCH-TEXT")
   (setvar "DIMTXT"   2.5)         ; Plotted height = 2.5 mm
@@ -257,7 +366,7 @@
   (setvar "DIMLWE"   18)          ; 0.18 mm
   (setvar "DIMTOFL"  1)           ; Force line between points
 
-  ;; 5A. Save ARCH-TICK (Annotative)
+  ;; D1. Save ARCH-TICK (Annotative)
   (setvar "DIMBLK" "_ArchTick")
   (setvar "DIMASZ" 1.5)
   (if (tblsearch "dimstyle" "ARCH-TICK")
@@ -265,7 +374,7 @@
     (command "-dimstyle" "_save" "ARCH-TICK")
   )
 
-  ;; 5B. Save ARCH-ARROW (Annotative)
+  ;; D2. Save ARCH-ARROW (Annotative)
   (setvar "DIMBLK" ".")           ; Closed Filled Arrow
   (setvar "DIMASZ" 2.2)
   (if (tblsearch "dimstyle" "ARCH-ARROW")
@@ -276,12 +385,8 @@
   (command "-dimstyle" "_restore" "ARCH-TICK")
 
   ;; -------------------------------------------------------------------------
-  ;; 6. ENVIRONMENT CONFIGURATION & COMMAND SUITES
+  ;; E. ENVIRONMENT CONFIGURATION & COMMAND SUITES
   ;; -------------------------------------------------------------------------
-  ;; Note: All global environment controls, cursor ergonomics, display, and snap
-  ;; settings are now centralized in Commands/00_System-Variables.lsp and loaded
-  ;; in prioritized order by c:LOAD-COMMAND.
-
   ;; Set current drawing layer safely (fallback to 0 if not found)
   (if (tblsearch "LAYER" "R-LINE-VISB")
     (setvar "CLAYER" "R-LINE-VISB")
@@ -291,300 +396,21 @@
     )
   )
 
-  ;; Load Custom Command Suites (Priority-ordered execution from highest to lowest number)
-  (c:LOAD-COMMAND)
+  ;; Load Custom Command Suites (Priority-ordered execution from 00 to 99)
+  (c:RELOAD-COMMAND-SUITES)
 
   ;; Undo Mark Finalization
   (if doc (vla-endundomark doc))
   
   (princ "\n[✓] Layers generated and visual swatch table built successfully.")
-  (princ "\n[✓] CAD-SETUP successfully configured with Annotative styles and Production layers.")
+  (princ "\n[✓] CAD-SETUP-AUTORUN successfully configured with Annotative styles and Production layers.")
   (princ "\n[✓] Drafting environment & custom command suites initialized from Commands/.\n")
   (princ)
 )
 
 ;; ===========================================================================
-;; PATH RESOLUTION & AUTOCAD INTEGRATION ENGINE
+;; 4. AUTOMATIC INITIALIZATION ON APPLOAD / STARTUP SUITE
 ;; ===========================================================================
-
-;; Helper: Strip trailing slashes/backslashes
-(defun CadSetup:NormalizePath (p /)
-  (if (and p (= (type p) 'STR) (> (strlen p) 0))
-    (progn
-      (while (and (> (strlen p) 1)
-                  (vl-position (substr p (strlen p) 1) '("\\" "/")))
-        (setq p (substr p 1 (1- (strlen p))))
-      )
-      p
-    )
-    nil
-  )
-)
-
-;; Helper: Multi-tier directory resolution for CAD-SETUP
-(defun CadSetup:GetDir ( / dir testPath apploadReg apploadDir dwgDir regKey regVal count valName valData )
-  (setq dir nil)
-
-  ;; 1. Global runtime cache
-  (if (and (boundp '*CAD-SETUP-DIR*)
-           *CAD-SETUP-DIR*
-           (= (type *CAD-SETUP-DIR*) 'STR)
-           (vl-file-directory-p (strcat (CadSetup:NormalizePath *CAD-SETUP-DIR*) "\\Commands")))
-    (setq dir (CadSetup:NormalizePath *CAD-SETUP-DIR*))
-  )
-
-  ;; 2. Windows registry cache under active AutoCAD profile
-  (if (not dir)
-    (vl-catch-all-apply
-      (function
-        (lambda ()
-          (setq regKey (strcat "HKEY_CURRENT_USER\\" (vlax-product-key) 
-                               "\\Profiles\\" (getvar "CPROFILE") 
-                               "\\CadSetup"))
-          (setq regVal (vl-registry-read regKey "InstallDir"))
-          (if (and regVal 
-                   (= (type regVal) 'STR)
-                   (vl-file-directory-p (strcat (CadSetup:NormalizePath regVal) "\\Commands")))
-            (setq dir (CadSetup:NormalizePath regVal))
-          )
-        )
-      )
-    )
-  )
-
-  ;; 3. AutoCAD Support Paths via findfile
-  (if (not dir)
-    (foreach fName '("CAD-SETUP.lsp" "CAD-SETTINGS.lsp")
-      (if (and (not dir) (setq testPath (findfile fName)))
-        (progn
-          (setq testPath (CadSetup:NormalizePath (vl-filename-directory testPath)))
-          (if (and testPath (vl-file-directory-p (strcat testPath "\\Commands")))
-            (setq dir testPath)
-          )
-        )
-      )
-    )
-  )
-
-  ;; 4. AutoCAD APPLOAD dialog registry inspection (MainDialog, Startup Suite, History)
-  (if (not dir)
-    (vl-catch-all-apply
-      (function
-        (lambda ()
-          (setq apploadReg (strcat "HKEY_CURRENT_USER\\" (vlax-product-key) 
-                                   "\\Profiles\\" (getvar "CPROFILE") 
-                                   "\\Dialogs\\Appload"))
-          ;; 4a. Check MainDialog (folder last navigated in APPLOAD dialog)
-          (setq apploadDir (vl-registry-read apploadReg "MainDialog"))
-          (if (and apploadDir (= (type apploadDir) 'STR))
-            (progn
-              (setq apploadDir (CadSetup:NormalizePath apploadDir))
-              (if (and apploadDir (vl-file-directory-p (strcat apploadDir "\\Commands")))
-                (setq dir apploadDir)
-              )
-            )
-          )
-          ;; 4b. Check Startup Suite registry entries
-          (if (not dir)
-            (progn
-              (setq count 1)
-              (while (and (not dir) (<= count 50))
-                (setq valName (itoa count))
-                (setq valData (vl-registry-read (strcat apploadReg "\\Startup") valName))
-                (if (and valData (= (type valData) 'STR) (wcmatch (strcase valData) "*CAD-SETUP*"))
-                  (progn
-                    (setq testPath (CadSetup:NormalizePath (vl-filename-directory valData)))
-                    (if (and testPath (vl-file-directory-p (strcat testPath "\\Commands")))
-                      (setq dir testPath)
-                    )
-                  )
-                )
-                (setq count (1+ count))
-              )
-            )
-          )
-          ;; 4c. Check History registry entries
-          (if (not dir)
-            (progn
-              (setq count 1)
-              (while (and (not dir) (<= count 50))
-                (setq valName (itoa count))
-                (setq valData (vl-registry-read (strcat apploadReg "\\History") valName))
-                (if (and valData (= (type valData) 'STR) (wcmatch (strcase valData) "*CAD-SETUP*"))
-                  (progn
-                    (setq testPath (CadSetup:NormalizePath (vl-filename-directory valData)))
-                    (if (and testPath (vl-file-directory-p (strcat testPath "\\Commands")))
-                      (setq dir testPath)
-                    )
-                  )
-                )
-                (setq count (1+ count))
-              )
-            )
-          )
-        )
-      )
-    )
-  )
-
-  ;; 5. Current Drawing Directory (DWGPREFIX)
-  (if (not dir)
-    (progn
-      (setq dwgDir (CadSetup:NormalizePath (getvar "DWGPREFIX")))
-      (if (and dwgDir (vl-file-directory-p (strcat dwgDir "\\Commands")))
-        (setq dir dwgDir)
-      )
-    )
-  )
-
-  ;; 6. Standard system & drive paths fallback
-  (if (not dir)
-    (foreach candidate '("D:\\Cad-Setup-v3" "C:\\Cad-Setup-v3" "D:\\Cad-Setup" "C:\\Cad-Setup")
-      (if (and (not dir) (vl-file-directory-p (strcat candidate "\\Commands")))
-        (setq dir candidate)
-      )
-    )
-  )
-
-  ;; 7. Interactive fallback dialog (in case the suite was moved to an unindexed location)
-  (if (not dir)
-    (progn
-      (princ "\n[Cad-Setup] Locating CAD-SETUP installation directory...")
-      (setq testPath (getfiled "Locate CAD-SETUP.lsp" "CAD-SETUP.lsp" "lsp" 16))
-      (if (and testPath (findfile testPath))
-        (progn
-          (setq testPath (CadSetup:NormalizePath (vl-filename-directory testPath)))
-          (if (and testPath (vl-file-directory-p (strcat testPath "\\Commands")))
-            (setq dir testPath)
-          )
-        )
-      )
-    )
-  )
-
-  ;; If directory successfully resolved, cache in memory & registry
-  (if dir
-    (progn
-      (setq *CAD-SETUP-DIR* dir)
-      (vl-catch-all-apply
-        (function
-          (lambda ()
-            (setq regKey (strcat "HKEY_CURRENT_USER\\" (vlax-product-key) 
-                                 "\\Profiles\\" (getvar "CPROFILE") 
-                                 "\\CadSetup"))
-            (vl-registry-write regKey "InstallDir" dir)
-          )
-        )
-      )
-    )
-  )
-
-  dir
-)
-
-;; Helper: Register directory and Commands folder in AutoCAD Support File Search Path
-(defun CadSetup:RegisterSupportPaths (baseDir / acadApp prefObj filesObj curPaths pList changed)
-  (vl-load-com)
-  (if (and baseDir (vl-file-directory-p baseDir))
-    (vl-catch-all-apply
-      (function
-        (lambda ( / p)
-          (setq acadApp (vlax-get-acad-object))
-          (if acadApp
-            (progn
-              (setq prefObj  (vla-get-preferences acadApp)
-                    filesObj (vla-get-files prefObj)
-                    curPaths (vla-get-supportpath filesObj)
-                    pList    (list baseDir (strcat baseDir "\\Commands"))
-                    changed  nil)
-              (foreach p pList
-                (if (and (vl-file-directory-p p)
-                         (not (vl-string-search (strcase p) (strcase curPaths))))
-                  (progn
-                    (setq curPaths (strcat curPaths ";" p)
-                          changed  T)
-                  )
-                )
-              )
-              (if changed
-                (progn
-                  (vla-put-supportpath filesObj curPaths)
-                  (princ (strcat "\n[Cad-Setup] Registered in AutoCAD Support Search Path: " baseDir))
-                )
-              )
-            )
-          )
-        )
-      )
-    )
-  )
-)
-
-;; ---------------------------------------------------------------------------
-;; COMMAND: LOAD-COMMAND / LOAD-COMMANDS
-;; Discovers and loads all .lsp files in "Commands" with priority ordering
-;; ---------------------------------------------------------------------------
-(defun c:LOAD-COMMAND ( / baseDir cmdDir lspFiles fName fullPath loadedCount failedCount res )
-  (vl-load-com)
-  (setq baseDir (CadSetup:GetDir))
-
-  (if baseDir
-    (progn
-      ;; Register directories in AutoCAD Support Path
-      (CadSetup:RegisterSupportPaths baseDir)
-      (setq cmdDir (strcat baseDir "\\Commands"))
-
-      (if (and cmdDir (vl-file-directory-p cmdDir))
-        (progn
-          ;; Discover and sort files descending (highest numbered file down to lowest numbered file)
-          (setq lspFiles (vl-directory-files cmdDir "*.lsp" 1))
-          (setq lspFiles (vl-sort lspFiles (function (lambda (a b) (> (strcase a) (strcase b))))))
-          (setq loadedCount 0
-                failedCount 0)
-
-          (princ "\n------------------------------------------------------------")
-          (princ (strcat "\n[Commands] Loading modular drafting suites from: " cmdDir))
-          (princ "\n[Commands] Priority-ordered execution (High -> Low)...")
-          (princ "\n------------------------------------------------------------")
-
-          (while lspFiles
-            (setq fName    (car lspFiles)
-                  lspFiles (cdr lspFiles)
-                  fullPath (strcat cmdDir "\\" fName))
-            (setq res (vl-catch-all-apply 'load (list fullPath)))
-            (if (vl-catch-all-error-p res)
-              (progn
-                (setq failedCount (1+ failedCount))
-                (princ (strcat "\n [X] Failed: " fName " -> " (vl-catch-all-error-message res)))
-              )
-              (progn
-                (setq loadedCount (1+ loadedCount))
-                (princ (strcat "\n [✓] Loaded: " fName))
-              )
-            )
-          )
-
-          (princ "\n------------------------------------------------------------")
-          (princ (strcat "\n[Commands] Complete: " (itoa loadedCount) " suite(s) loaded successfully."))
-          (if (> failedCount 0)
-            (princ (strcat "\n[Commands] Warning: " (itoa failedCount) " suite(s) encountered errors."))
-          )
-          (princ "\n------------------------------------------------------------\n")
-        )
-        (princ (strcat "\n[Commands] Error: Directory '" cmdDir "' not found.\n"))
-      )
-    )
-    (princ "\n[Commands] Error: Could not resolve CAD-SETUP directory. Please run APPLOAD or configure path.\n")
-  )
-  (princ)
-)
-
-;; ---------------------------------------------------------------------------
-;; COMMAND ALIASES FOR CAD-SETUP & LOAD-COMMAND
-;; ---------------------------------------------------------------------------
-(defun c:CADSETUP () (c:CAD-SETUP))
-(defun c:LOAD-COMMANDS () (c:LOAD-COMMAND))
-
-(c:CAD-SETUP)
-(princ "\n[Loaded]: CAD-SETUP initialized. Type CAD-SETUP or LOAD-COMMAND to run.\n")
+(CadSetup:Initialize)
+(princ "\n[Loaded]: CAD-SETUP-AUTORUN initialized. Type RELOAD-COMMAND-SUITES or RCS to reload command suites.\n")
 (princ)

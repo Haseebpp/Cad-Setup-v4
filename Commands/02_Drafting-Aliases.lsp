@@ -9,7 +9,7 @@
 
 ;;; NOTE: High-frequency single-line aliases and overrides (C, CC, Q, D, RC,
 ;;; P, XL, V, TT, XX, RR, SS, EE, AA, MM, OO, WW, SC, EXP, PC, FF, F0, CF0)
-;;; have been consolidated into Commands/Aliases-Min.lsp for easy editing.
+;;; have been consolidated into Commands/99_Aliases.lsp for easy editing.
 ;;; --------------------------------------------------------------------------
 
 ;; 'JJ' - Instant Polyline Join for connected lines/arcs/polylines

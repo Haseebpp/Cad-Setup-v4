@@ -178,7 +178,7 @@
   (princ)
 )
 
-;; Note: ` (REFEDIT) alias is maintained in Commands/Aliases-Min.lsp
+;; Note: ` (REFEDIT) alias is maintained in Commands/99_Aliases.lsp
 
 ;;; --------------------------------------------------------------------------
 ;;; 2. FAST IN-PLACE BLOCK TRANSFORMS (RB, RBH, RBV)

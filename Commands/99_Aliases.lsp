@@ -1,11 +1,12 @@
 ;;; ==========================================================================
-;;; 01_Aliases-Min.lsp - Minimal Custom AutoCAD Aliases & Overrides
+;;; 99_Aliases.lsp - Final Stage Consolidated Drafting Aliases & Overrides
 ;;; ==========================================================================
-;;; Category : Ergonomic Single-Line Aliases & Overrides
+;;; Category : Final-Stage Ergonomic Shortcuts & Command Remappings
 ;;; Author   : Haseeb
 ;;; ==========================================================================
-;;; Template for adding your own aliases:
-;;;   (defun c:YOUR_ALIAS () (command "_.AUTOCAD_COMMAND") (princ))
+;;; NOTE: This file is loaded LAST (Stage 99) so that all foundational commands,
+;;; drafting routines, block operations, layer tools, and utilities are already
+;;; defined in memory before these aliases are registered.
 ;;; ==========================================================================
 
 (vl-load-com)
@@ -71,7 +72,13 @@
 ;;; --------------------------------------------------------------------------
 
 (defun c:FF  () (setvar "FILLETRAD" 0.0) (initcommandversion) (command "_.FILLET") (princ))
-(defun c:F0  () (c:FF) (princ))
+(defun c:F0  ()
+  (if (vl-symbol-value 'c:FF)
+    (c:FF)
+    (progn (setvar "FILLETRAD" 0.0) (initcommandversion) (command "_.FILLET"))
+  )
+  (princ)
+)
 (defun c:CF0 () (setvar "CHAMFERA" 0.0) (setvar "CHAMFERB" 0.0) (initcommandversion) (command "_.CHAMFER") (princ))
 
 
@@ -136,5 +143,5 @@
 (defun c:QS  () (command "_.QSAVE") (princ))
 (defun c:CL  () (command "_.CLOSE") (princ))
 
-(princ "\nPersonal aliases (minimal) loaded successfully.")
+(princ "\n[99_Aliases.lsp] Consolidated personal aliases loaded successfully.")
 (princ)

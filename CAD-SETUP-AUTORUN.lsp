@@ -1,7 +1,7 @@
 ;;; ==========================================================================
 ;;; CAD-SETUP-AUTORUN.lsp - Production Architectural & Fitout Drafting System
 ;;; Automatic Initialization File for AutoCAD APPLOAD / Startup Suite
-;;; Commands     : RELOAD-COMMAND-SUITES (Alias: RCS, LOAD-COMMAND, LOAD-COMMANDS)
+;;; Commands     : RELOAD-COMMAND-SUITES, RCS, LOAD-COMMANDS
 ;;; ==========================================================================
 
 (vl-load-com)
@@ -40,7 +40,7 @@
 ;; ===========================================================================
 
 ;; Core function: Discovers and loads all .lsp files in "Commands" folder
-(defun Reload-Command-Suites ( / baseDir cmdDir lspFiles fName fullPath loadedCount failedCount res )
+(defun LOAD-COMMANDS ( / baseDir cmdDir lspFiles fName fullPath loadedCount failedCount res )
   (vl-load-com)
   (setq baseDir (CadSetup:GetDir))
 
@@ -87,11 +87,6 @@
         )
         (princ (strcat "\n[Commands] Error: Directory '" cmdDir "' not found.\n"))
       )
-
-      ;; Autoload CAD-SETTINGS dialog manager if present in project directory
-      (if (findfile (strcat baseDir "\\CAD-SETTINGS.lsp"))
-        (autoload (strcat baseDir "\\CAD-SETTINGS.lsp") '("CAD-SETTINGS" "CADSETTINGS"))
-      )
     )
     (princ (strcat "\n[Commands] Error: Base directory '" (vl-princ-to-string baseDir) "' not found.\n"))
   )
@@ -99,14 +94,8 @@
 )
 
 ;; AutoCAD Command Aliases (type without parentheses at AutoCAD command line)
-(defun c:RELOAD-COMMAND-SUITES () (Reload-Command-Suites))
-(defun c:RCS () (Reload-Command-Suites))
-(defun c:LOAD-COMMAND () (Reload-Command-Suites))
-(defun c:LOAD-COMMANDS () (Reload-Command-Suites))
-
-;; LISP Function Wrappers (runnable like (RELOAD-COMMAND-SUITES) or (RCS))
-(defun RELOAD-COMMAND-SUITES () (Reload-Command-Suites))
-(defun RCS () (Reload-Command-Suites))
+(defun c:RELOAD-COMMAND-SUITES () (LOAD-COMMANDS))
+(defun c:RCS () (LOAD-COMMANDS))
 
 ;; ===========================================================================
 ;; 3. CORE DRAWING INITIALIZATION ROUTINE (AUTORUN)

@@ -1,7 +1,7 @@
 ;;; ==========================================================================
 ;;; 03_Blocks.lsp - Auto Block Generators & In-Place Fast Block Transforms
-;;; ==========================================================================
-;;; Category : Block Automation & Manipulation
+;;; Part of Cad-Setup-v3 Horizontal Layered Architecture
+;;; Layer: Commands (Priority 03)
 ;;; Author   : Haseeb
 ;;; ==========================================================================
 
@@ -12,18 +12,11 @@
 ;;; --------------------------------------------------------------------------
 
 ;; CB / G : Auto-create block with timestamp name and Bottom-Left base point
-(defun c:CB (/ *error* doc ss i ent obj minPt maxPt pMinW pMaxW ptU
-               allUcsX allUcsY allUcsZ blkName baseName count basePt oldCmd oldAtt)
-  (vl-load-com)
-  (setq doc (vla-get-activedocument (vlax-get-acad-object)))
-
-  ;; Localized Error Handler & Undo Stack Safety
+(defun c:CB (/ *error* ss bbox blkName baseName count basePt oldCmd oldAtt)
   (defun *error* (msg)
     (if oldAtt (setvar 'attreq oldAtt))
     (if oldCmd (setvar 'cmdecho oldCmd))
-    (if (and doc (= (type doc) 'VLA-OBJECT))
-      (vl-catch-all-apply 'vla-endundomark (list doc))
-    )
+    (CadSetup:UndoReset)
     (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
       (princ (strcat "\n[CB] Error: " msg))
     )
@@ -45,36 +38,12 @@
 
   (if ss
     (progn
-      (vla-startundomark doc)
+      (CadSetup:UndoStart)
 
-      ;; Compute collective bottom-left bounding coordinate in CURRENT UCS
-      (setq i 0)
-      (while (< i (sslength ss))
-        (setq ent (ssname ss i)
-              obj (vlax-ename->vla-object ent))
-        (if (not (vl-catch-all-error-p (vl-catch-all-apply 'vla-getboundingbox (list obj 'minPt 'maxPt))))
-          (progn
-            (setq pMinW (vlax-safearray->list minPt)
-                  pMaxW (vlax-safearray->list maxPt))
-            ;; Evaluate all bounding box corners transformed from WCS (0) to Current UCS (1)
-            (foreach ptW (list pMinW
-                               (list (car pMaxW) (cadr pMinW) (caddr pMinW))
-                               pMaxW
-                               (list (car pMinW) (cadr pMaxW) (caddr pMinW)))
-              (setq ptU (trans ptW 0 1))
-              (setq allUcsX (cons (car ptU) allUcsX)
-                    allUcsY (cons (cadr ptU) allUcsY)
-                    allUcsZ (cons (caddr ptU) allUcsZ))
-            )
-          )
-        )
-        (setq i (1+ i))
-      )
-
-      (if (and allUcsX allUcsY)
-        (setq basePt (list (apply 'min allUcsX)
-                           (apply 'min allUcsY)
-                           (if allUcsZ (apply 'min allUcsZ) 0.0)))
+      ;; Compute collective bottom-left bounding coordinate in CURRENT UCS using geometry helper
+      (setq bbox (CadSetup:GetBoundingBoxUcs ss))
+      (if bbox
+        (setq basePt (car bbox))
         (setq basePt (getvar 'insbase))
       )
 
@@ -98,7 +67,7 @@
       (command "._-block" blkName "_non" basePt ss "")
       (command "._-insert" blkName "_non" basePt 1.0 1.0 0.0)
 
-      (vla-endundomark doc)
+      (CadSetup:UndoEnd)
       (princ (strcat "\n[CB] Block created: \"" blkName "\" at Bottom-Left base point."))
     )
     (princ "\n[CB] No objects selected.")
@@ -113,17 +82,11 @@
 (defun c:G () (c:CB) (princ))
 
 ;; OB : Auto-create block with timestamp name at Origin (0,0,0)
-(defun c:OB (/ *error* doc ss blkName baseName count basePt oldCmd oldAtt)
-  (vl-load-com)
-  (setq doc (vla-get-activedocument (vlax-get-acad-object)))
-
-  ;; Localized Error Handler & Undo Stack Safety
+(defun c:OB (/ *error* ss blkName baseName count basePt oldCmd oldAtt)
   (defun *error* (msg)
     (if oldAtt (setvar 'attreq oldAtt))
     (if oldCmd (setvar 'cmdecho oldCmd))
-    (if (and doc (= (type doc) 'VLA-OBJECT))
-      (vl-catch-all-apply 'vla-endundomark (list doc))
-    )
+    (CadSetup:UndoReset)
     (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
       (princ (strcat "\n[OB] Error: " msg))
     )
@@ -145,7 +108,7 @@
 
   (if ss
     (progn
-      (vla-startundomark doc)
+      (CadSetup:UndoStart)
       (setq basePt '(0.0 0.0 0.0))
       (setq blkName (strcat "BLK_" (menucmd "M=$(edtime,$(getvar,date),YYYYMODD_HHMMSS)")))
       (if (or (null blkName) (= blkName "BLK_"))
@@ -165,7 +128,7 @@
       (command "._-block" blkName "_non" basePt ss "")
       (command "._-insert" blkName "_non" basePt 1.0 1.0 0.0)
 
-      (vla-endundomark doc)
+      (CadSetup:UndoEnd)
       (princ (strcat "\n[OB] Block created: \"" blkName "\" at Origin (0,0,0)."))
     )
     (princ "\n[OB] No objects selected.")
@@ -176,28 +139,25 @@
   (princ)
 )
 
-;; Note: ` (REFEDIT) alias is maintained in Commands/99_Aliases.lsp
 
 ;;; --------------------------------------------------------------------------
 ;;; 2. FAST IN-PLACE BLOCK TRANSFORMS (RB, RBH, RBV)
 ;;; --------------------------------------------------------------------------
 
-;; Fast Helper: Extract Bounding Box Center (in WCS)
-(defun _FastMidPt (obj / p1 p2)
-  (if (not (vl-catch-all-error-p (vl-catch-all-apply 'vla-getboundingbox (list obj 'p1 'p2))))
-    (mapcar '(lambda (a b) (/ (+ a b) 2.0))
-            (vlax-safearray->list p1)
-            (vlax-safearray->list p2))
+;; Helper: Extract Bounding Box Center using Geometry Helpers
+(defun _FastMidPt (obj / bbox)
+  (setq bbox (CadSetup:GetBoundingBox obj))
+  (if bbox
+    (CadSetup:MidPoint (car bbox) (cadr bbox))
+    nil
   )
 )
 
 ;; Master Transform Engine
-(defun _ExecTransform (mode / *error* doc echo ss i ent obj mid ucsMid pt2 new-obj)
+(defun _ExecTransform (mode / *error* echo ss i ent obj mid ucsMid pt2 new-obj)
   (defun *error* (msg)
     (if echo (setvar 'CMDECHO echo))
-    (if (and doc (= (type doc) 'VLA-OBJECT))
-      (vl-catch-all-apply 'vla-endundomark (list doc))
-    )
+    (CadSetup:UndoReset)
     (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*,*quit*")))
       (princ (strcat "\nError: " msg))
     )
@@ -207,8 +167,7 @@
   (setq echo (getvar 'CMDECHO))
   (setvar 'CMDECHO 0)
 
-  (setq doc (vla-get-activedocument (vlax-get-acad-object)))
-  (vla-startundomark doc)
+  (CadSetup:UndoStart)
 
   ;; "_:L" filter rejects locked layers instantly at selection time
   (if (setq ss (ssget "_:L" '((0 . "INSERT"))))
@@ -247,7 +206,7 @@
     )
   )
 
-  (vla-endundomark doc)
+  (CadSetup:UndoEnd)
   (setvar 'CMDECHO echo)
   (princ)
 )

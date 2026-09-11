@@ -1,7 +1,7 @@
 ;;; ==========================================================================
 ;;; 04_Layout-Views.lsp - Zoom, Views, Annotation Shortcuts & Layout Presentation
-;;; ==========================================================================
-;;; Category : View Navigation, Annotations & Layout Setup
+;;; Part of Cad-Setup-v3 Horizontal Layered Architecture
+;;; Layer: Commands (Priority 04)
 ;;; Author   : Haseeb
 ;;; ==========================================================================
 
@@ -13,44 +13,49 @@
 
 ;; LB : Toggle Layout between Dark Mode and Presentation White Paper (with Plot Styles)
 (defun c:LB ( / acadApp doc prefObj dispPref layouts actLay isPlotStyleOn darkColor whiteColor )
-  (setq acadApp    (vlax-get-acad-object)
-        doc        (vla-get-activedocument acadApp)
-        prefObj    (vla-get-preferences acadApp)
-        dispPref   (vla-get-display prefObj)
-        layouts    (vla-get-layouts doc)
-        actLay     (vla-get-ActiveLayout doc)
+  (setq acadApp    (CadSetup:GetAcad)
+        doc        (CadSetup:GetDoc)
+        prefObj    (if acadApp (vla-get-preferences acadApp))
+        dispPref   (if prefObj (vla-get-display prefObj))
+        layouts    (if doc (vla-get-layouts doc))
+        actLay     (if doc (vla-get-ActiveLayout doc))
         whiteColor 16777215  ;; RGB: 255, 255, 255
         darkColor  3156001)  ;; RGB: 33, 40, 48 (Dark Charcoal)
 
-  (setq isPlotStyleOn (= (vla-get-ShowPlotStyles actLay) :vlax-true))
+  (if (and actLay dispPref layouts)
+    (progn
+      (setq isPlotStyleOn (= (vla-get-ShowPlotStyles actLay) :vlax-true))
 
-  (if isPlotStyleOn
-    ;; Switch to Dark Drafting Mode
-    (progn
-      (vla-put-GraphicsWinLayoutBackgrndColor dispPref darkColor)
-      (vla-put-LayoutDisplayPaper dispPref :vlax-false)
-      (vla-put-LayoutDisplayMargins dispPref :vlax-true)
-      (vlax-for lay layouts
-        (if (/= (strcase (vla-get-name lay)) "MODEL")
-          (vla-put-ShowPlotStyles lay :vlax-false)
+      (if isPlotStyleOn
+        ;; Switch to Dark Drafting Mode
+        (progn
+          (vla-put-GraphicsWinLayoutBackgrndColor dispPref darkColor)
+          (vla-put-LayoutDisplayPaper dispPref :vlax-false)
+          (vla-put-LayoutDisplayMargins dispPref :vlax-true)
+          (vlax-for lay layouts
+            (if (/= (strcase (vla-get-name lay)) "MODEL")
+              (vla-put-ShowPlotStyles lay :vlax-false)
+            )
+          )
+          (vla-regen doc 1)
+          (princ "\n[LB] Switched to Dark Drafting Mode.")
+        )
+        ;; Switch to White Presentation Mode
+        (progn
+          (vla-put-GraphicsWinLayoutBackgrndColor dispPref whiteColor)
+          (vla-put-LayoutDisplayPaper dispPref :vlax-true)
+          (vla-put-LayoutDisplayMargins dispPref :vlax-false)
+          (vlax-for lay layouts
+            (if (/= (strcase (vla-get-name lay)) "MODEL")
+              (vla-put-ShowPlotStyles lay :vlax-true)
+            )
+          )
+          (vla-regen doc 1)
+          (princ "\n[LB] Switched to White Presentation Mode.")
         )
       )
-      (vla-regen doc 1)
-      (princ "\n[LB] Switched to Dark Drafting Mode.")
     )
-    ;; Switch to White Presentation Mode
-    (progn
-      (vla-put-GraphicsWinLayoutBackgrndColor dispPref whiteColor)
-      (vla-put-LayoutDisplayPaper dispPref :vlax-true)
-      (vla-put-LayoutDisplayMargins dispPref :vlax-false)
-      (vlax-for lay layouts
-        (if (/= (strcase (vla-get-name lay)) "MODEL")
-          (vla-put-ShowPlotStyles lay :vlax-true)
-        )
-      )
-      (vla-regen doc 1)
-      (princ "\n[LB] Switched to White Presentation Mode.")
-    )
+    (princ "\n[LB] Active layout or display preferences not available.")
   )
   (princ)
 )
@@ -60,27 +65,22 @@
 ;;; --------------------------------------------------------------------------
 
 ;; A3SERIES : Generate A3 Scaled Reference Frames at Origin (1:1 to 1:50)
-(defun c:A3SERIES (/ *error* doc baseW baseH gap startPt currentScale 
+(defun c:A3SERIES (/ *error* baseW baseH gap startPt currentScale 
                      curW curH pt1 pt2 textHt textPt scaleList old-echo old-osmode)
-  (vl-load-com)
-  (setq doc (vla-get-activedocument (vlax-get-acad-object)))
   (setq old-echo   (getvar "CMDECHO")
         old-osmode (getvar "OSMODE"))
 
-  ;; Localized Error Handler & System Variable Safety
   (defun *error* (msg)
     (if old-osmode (setvar "OSMODE"  old-osmode))
     (if old-echo   (setvar "CMDECHO" old-echo))
-    (if (and doc (= (type doc) 'VLA-OBJECT))
-      (vl-catch-all-apply 'vla-endundomark (list doc))
-    )
+    (CadSetup:UndoReset)
     (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
       (princ (strcat "\n[A3SERIES] Error: " msg))
     )
     (princ)
   )
 
-  (vla-startundomark doc)
+  (CadSetup:UndoStart)
   (setvar "CMDECHO" 0)
   (setvar "OSMODE"  0)
 
@@ -113,7 +113,7 @@
     (setq startPt (list (+ (car startPt) curW gap) (cadr startPt) (caddr startPt)))
   )
   
-  (vla-endundomark doc)
+  (CadSetup:UndoEnd)
   (setvar "CMDECHO" old-echo)
   (setvar "OSMODE"  old-osmode)
   (princ "\n[A3SERIES] A3 scale series frames (1:1 to 1:50) created.")

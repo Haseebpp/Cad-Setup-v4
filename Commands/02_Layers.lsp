@@ -1,7 +1,7 @@
 ;;; ==========================================================================
 ;;; 02_Layers.lsp - Lightning-Fast Layer Management Shortcuts & Utilities
-;;; ==========================================================================
-;;; Category : Layer Operations
+;;; Part of Cad-Setup-v3 Horizontal Layered Architecture
+;;; Layer: Commands (Priority 02)
 ;;; Author   : Haseeb
 ;;; ==========================================================================
 
@@ -13,7 +13,7 @@
 
 ;; L0 : Switch active layer to "0" immediately
 (defun c:L0 ()
-  (setvar "CLAYER" "0")
+  (CadSetup:SetCurrentLayerSafe "0")
   (princ "\n[L0] Current Layer is now: \"0\"")
   (princ)
 )

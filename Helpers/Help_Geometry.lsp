@@ -122,5 +122,32 @@
   )
 )
 
+;; ===========================================================================
+;; ANNOTATIVE SCALE & MULTIPLIER UTILITIES
+;; ===========================================================================
+
+;; CadSetup:GetAnnoScaleRatio - Computes modelspace scale multiplier
+;; Derives scale factor from CANNOSCALEVALUE (drawing units per paper unit),
+;; falling back to DIMSCALE or 1.0.
+(defun CadSetup:GetAnnoScaleRatio ( / cVal dimSc )
+  (setq cVal (CadSetup:SafeGetVar "CANNOSCALEVALUE" nil))
+  (cond
+    ((and (numberp cVal) (> cVal 0.0))
+     (/ 1.0 cVal))
+    ((and (setq dimSc (CadSetup:SafeGetVar "DIMSCALE" nil)) (numberp dimSc) (> dimSc 0.0))
+     dimSc)
+    (t 1.0)
+  )
+)
+
+;; CadSetup:GetAnnoScaleName - Returns active annotative scale name string
+(defun CadSetup:GetAnnoScaleName ( / scName )
+  (setq scName (CadSetup:SafeGetVar "CANNOSCALE" nil))
+  (if (and scName (= (type scName) 'STR) (> (strlen scName) 0))
+    scName
+    "1:1"
+  )
+)
+
 (princ "\n[Helpers/Help_Geometry.lsp] Geometry, bounding box & curve math loaded.")
 (princ)

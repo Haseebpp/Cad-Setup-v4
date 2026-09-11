@@ -151,5 +151,85 @@
   )
 )
 
+;; ===========================================================================
+;; LAYER LOCK STATE MANAGEMENT
+;; ===========================================================================
+
+;; CadSetup:EnsureLayerUnlocked - Safely unlocks a single layer if it exists and is locked
+(defun CadSetup:EnsureLayerUnlocked (layName / acadDoc layObj)
+  (if (and layName (= (type layName) 'STR) (> (strlen layName) 0) (tblsearch "LAYER" layName))
+    (progn
+      (setq acadDoc (CadSetup:GetDoc))
+      (if acadDoc
+        (vl-catch-all-apply
+          (function
+            (lambda ()
+              (setq layObj (vla-Item (vla-get-Layers acadDoc) layName))
+              (if (and layObj (= (vla-get-Lock layObj) :vlax-true))
+                (vla-put-Lock layObj :vlax-false)
+              )
+            )
+          )
+        )
+      )
+      T
+    )
+    nil
+  )
+)
+
+;; CadSetup:UnlockAllLayers - Unlocks all currently locked layers in the active drawing
+;; Returns a list of strings containing the names of layers that were previously locked.
+(defun CadSetup:UnlockAllLayers ( / acadDoc layers lockedList layObj i count )
+  (setq acadDoc (CadSetup:GetDoc)
+        lockedList nil)
+  (if acadDoc
+    (progn
+      (setq layers (vla-get-Layers acadDoc)
+            count  (vla-get-Count layers)
+            i      0)
+      (while (< i count)
+        (setq layObj (vla-Item layers i))
+        (if (= (vla-get-Lock layObj) :vlax-true)
+          (progn
+            (setq lockedList (cons (vla-get-Name layObj) lockedList))
+            (vl-catch-all-apply 'vla-put-Lock (list layObj :vlax-false))
+          )
+        )
+        (setq i (1+ i))
+      )
+    )
+  )
+  lockedList
+)
+
+;; CadSetup:RestoreLockedLayers - Restores locked state to a specified list of layer names
+(defun CadSetup:RestoreLockedLayers (layerNames / acadDoc layers layObj)
+  (if (and layerNames (listp layerNames))
+    (progn
+      (setq acadDoc (CadSetup:GetDoc))
+      (if acadDoc
+        (progn
+          (setq layers (vla-get-Layers acadDoc))
+          (foreach lName layerNames
+            (if (and lName (= (type lName) 'STR) (tblsearch "LAYER" lName))
+              (vl-catch-all-apply
+                (function
+                  (lambda ()
+                    (setq layObj (vla-Item layers lName))
+                    (if layObj (vla-put-Lock layObj :vlax-true))
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+      T
+    )
+    nil
+  )
+)
+
 (princ "\n[Helpers/Help_Layers.lsp] Safe Layer & Linetype management loaded.")
 (princ)

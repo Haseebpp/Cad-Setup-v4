@@ -86,13 +86,14 @@ d:\Cad-Setup-v4\
 │   └── Db_Presets.lsp          ; Workspace presets (11 industry drafting profiles)
 ├── Helpers/
 │   ├── Help_ActiveX.lsp        ; Safe COM/VLA wrappers, safe getvar/setvar, clamp
-│   ├── Help_Selection.lsp      ; ssget filters, predicates (is-annotation, is-revcloud)
-│   ├── Help_Geometry.lsp       ; Bounding boxes in UCS, curve lengths, midpoints
-│   └── Help_Layers.lsp         ; EnsureLayer, SetCurrentLayerSafe, LoadLinetype
+│   ├── Help_Geometry.lsp       ; Bounding boxes in UCS, curve lengths, midpoints, annotative scale
+│   ├── Help_Graphics.lsp       ; 2D primitives (DrawBox, DrawLine, AddText), hatch & draw order
+│   ├── Help_Layers.lsp         ; EnsureLayer, SetCurrentLayerSafe, LoadLinetype
+│   └── Help_Selection.lsp      ; ssget filters, predicates (is-annotation, is-revcloud)
 ├── Commands/
 │   ├── 00_System-Variables.lsp ; Applies sysvars from Database/Db_SysVars.lsp
 │   ├── 01_Workflow-Keys.lsp    ; Fast drafting key shortcuts (1, 2, 3, 4)
-│   ├── 02_Layers.lsp           ; Layer management commands (L0)
+│   ├── 02_Layers.lsp           ; Layer management commands (RL, DCL, L0, BLL)
 │   ├── 03_Blocks.lsp           ; Block creation & transforms (CB, OB, RB, RBH, RBV)
 │   ├── 04_Layout-Views.lsp     ; Viewport and presentation tools (LB, A3SERIES)
 │   ├── 05_Selection-Filters.lsp; Fast selection isolators (SR, SL, SB, SH, SA, SW)

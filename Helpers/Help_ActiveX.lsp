@@ -10,22 +10,22 @@
 ;; ===========================================================================
 
 ;; CadSetup:GetAcad - Safely gets the top-level AutoCAD application COM object
-(defun CadSetup:GetAcad ( / acad )
-  (setq acad (vlax-get-acad-object))
-  (if (and acad (= (type acad) 'VLA-OBJECT))
-    acad
+(defun CadSetup:GetAcad ( / acadApp )
+  (setq acadApp (vlax-get-acad-object))
+  (if (and acadApp (= (type acadApp) 'VLA-OBJECT))
+    acadApp
     nil
   )
 )
 
 ;; CadSetup:GetDoc - Safely gets the ActiveDocument object
-(defun CadSetup:GetDoc ( / acad doc )
-  (setq acad (CadSetup:GetAcad))
-  (if acad
+(defun CadSetup:GetDoc ( / acadApp acadDoc )
+  (setq acadApp (CadSetup:GetAcad))
+  (if acadApp
     (progn
-      (setq doc (vl-catch-all-apply 'vla-get-activedocument (list acad)))
-      (if (and (not (vl-catch-all-error-p doc)) (= (type doc) 'VLA-OBJECT))
-        doc
+      (setq acadDoc (vl-catch-all-apply 'vla-get-activedocument (list acadApp)))
+      (if (and (not (vl-catch-all-error-p acadDoc)) (= (type acadDoc) 'VLA-OBJECT))
+        acadDoc
         nil
       )
     )
@@ -34,11 +34,11 @@
 )
 
 ;; CadSetup:GetModelSpace - Safely returns the ModelSpace collection
-(defun CadSetup:GetModelSpace ( / doc ms )
-  (setq doc (CadSetup:GetDoc))
-  (if doc
+(defun CadSetup:GetModelSpace ( / acadDoc ms )
+  (setq acadDoc (CadSetup:GetDoc))
+  (if acadDoc
     (progn
-      (setq ms (vl-catch-all-apply 'vla-get-modelspace (list doc)))
+      (setq ms (vl-catch-all-apply 'vla-get-modelspace (list acadDoc)))
       (if (and (not (vl-catch-all-error-p ms)) (= (type ms) 'VLA-OBJECT))
         ms
         nil
@@ -49,11 +49,11 @@
 )
 
 ;; CadSetup:GetPaperSpace - Safely returns the PaperSpace collection of the active layout
-(defun CadSetup:GetPaperSpace ( / doc ps )
-  (setq doc (CadSetup:GetDoc))
-  (if doc
+(defun CadSetup:GetPaperSpace ( / acadDoc ps )
+  (setq acadDoc (CadSetup:GetDoc))
+  (if acadDoc
     (progn
-      (setq ps (vl-catch-all-apply 'vla-get-paperspace (list doc)))
+      (setq ps (vl-catch-all-apply 'vla-get-paperspace (list acadDoc)))
       (if (and (not (vl-catch-all-error-p ps)) (= (type ps) 'VLA-OBJECT))
         ps
         nil

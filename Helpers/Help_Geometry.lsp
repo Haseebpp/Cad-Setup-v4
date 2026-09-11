@@ -1,6 +1,5 @@
 ;;; ==========================================================================
 ;;; Help_Geometry.lsp - Geometric Math, Bounding Boxes & Curve Length Engine
-;;; Part of Cad-Setup-v3 Horizontal Layered Architecture
 ;;; Layer: Helpers (Level 1)
 ;;; ==========================================================================
 

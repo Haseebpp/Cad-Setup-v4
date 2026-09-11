@@ -1,6 +1,5 @@
 ;;; ==========================================================================
 ;;; 02_Layers.lsp - Lightning-Fast Layer Management Shortcuts & Utilities
-;;; Part of Cad-Setup-v3 Horizontal Layered Architecture
 ;;; Layer: Commands (Priority 02)
 ;;; Author   : Haseeb
 ;;; ==========================================================================

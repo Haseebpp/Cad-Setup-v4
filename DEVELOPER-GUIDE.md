@@ -1,12 +1,12 @@
-# Cad-Setup-v3: Developer & Contributor Guide
+# Cad-Setup-v4: Developer & Contributor Guide
 
-A practical handbook for extending, developing, and debugging the `Cad-Setup-v3` modular AutoCAD drafting system.
+A practical handbook for extending, developing, and debugging the `Cad-Setup-v4` modular AutoCAD drafting system.
 
 ---
 
 ## 1. Quick Start & Hot Reloading
 
-When editing code in `d:\Cad-Setup-v3\`, you **do not need to restart AutoCAD** to test your changes.
+When editing code in `d:\Cad-Setup-v4\`, you **do not need to restart AutoCAD** to test your changes.
 
 1. Open AutoCAD.
 2. Edit any file in `Core/`, `Helpers/`, `Database/`, `Commands/`, or `UI/`.
@@ -178,7 +178,7 @@ Whenever you write a new command in `Commands/`, always use this battle-tested t
 ## 5. Troubleshooting & FAQ
 
 **Q: AutoCAD reports "CAD-SETTINGS.dcl not found".**
-- Ensure `d:\Cad-Setup-v3` is added to AutoCAD's Support File Search Path (`OPTIONS` $\rightarrow$ `Files` $\rightarrow$ `Support File Search Path`), or verify `CadSetup:GetDir` returns `D:\Cad-Setup-v3`.
+- Ensure `d:\Cad-Setup-v4` is added to AutoCAD's Support File Search Path (`OPTIONS` $\rightarrow$ `Files` $\rightarrow$ `Support File Search Path`), or verify `CadSetup:GetDir` returns `D:\Cad-Setup-v4`.
 
 **Q: Esc leaves my drawing in an unclosed undo transaction.**
 - Ensure your command wraps logic with `(CadSetup:UndoStart)` and `(CadSetup:UndoEnd)`, and that its `*error*` handler invokes `(CadSetup:UndoReset)`.

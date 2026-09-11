@@ -1,6 +1,5 @@
 ;;; ==========================================================================
 ;;; CAD-SETTINGS-CTRL.lsp - Controller & Event Engine for CAD-SETTINGS Dialog
-;;; Part of Cad-Setup-v3 Horizontal Layered Architecture
 ;;; Layer: UI (Event Handlers, Live Preview & Preset Controller)
 ;;; Commands: CAD-SETTINGS, CADSETTINGS
 ;;; ==========================================================================

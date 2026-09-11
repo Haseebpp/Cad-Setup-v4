@@ -1,6 +1,5 @@
 ;;; ==========================================================================
 ;;; 05_Selection-Filters.lsp - Smart Entity Filter & Isolation Shortcuts
-;;; Part of Cad-Setup-v3 Horizontal Layered Architecture
 ;;; Layer: Commands (Priority 05)
 ;;; Author   : Haseeb
 ;;; ==========================================================================

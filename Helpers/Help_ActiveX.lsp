@@ -1,6 +1,5 @@
 ;;; ==========================================================================
 ;;; Help_ActiveX.lsp - Safe COM/ActiveX Wrappers & System Variable Utilities
-;;; Part of Cad-Setup-v3 Horizontal Layered Architecture
 ;;; Layer: Helpers (Level 1)
 ;;; ==========================================================================
 

@@ -11,30 +11,22 @@
 ;; 1. SYSTEM ROOT DIRECTORY RESOLUTION
 ;; ===========================================================================
 
-;; User-configurable manual override path (optional):
-(if (not (boundp '*CAD-SETUP-DIR*))
-  (setq *CAD-SETUP-DIR* "D:\\Cad-Setup-v3")
-)
-
 ;; CadSetup:GetDir - Dynamic discovery of Cad-Setup root folder
 (defun CadSetup:GetDir ( / p candidate )
   (cond
-    ;; 1. Validated configured manual path
+    ;; 1. Folder containing CAD-SETUP-AUTORUN.lsp (Dynamic discovery)
+    ((and (setq p (findfile "CAD-SETUP-AUTORUN.lsp"))
+          (setq p (vl-filename-directory p))
+          (vl-file-directory-p p))
+     (vl-string-right-trim "\\/" p))
+
+    ;; 2. Optional manual override path (if set externally)
     ((and (boundp '*CAD-SETUP-DIR*)
           *CAD-SETUP-DIR*
           (= (type *CAD-SETUP-DIR*) 'STR)
           (setq candidate (vl-string-right-trim "\\/" *CAD-SETUP-DIR*))
           (vl-file-directory-p candidate))
      candidate)
-
-    ;; 2. Folder containing CAD-SETUP-AUTORUN.lsp
-    ((and (setq p (findfile "CAD-SETUP-AUTORUN.lsp"))
-          (setq p (vl-filename-directory p))
-          (vl-file-directory-p p))
-     (vl-string-right-trim "\\/" p))
-
-    ;; 3. Default safe fallback
-    (t "D:\\Cad-Setup-v3")
   )
 )
 

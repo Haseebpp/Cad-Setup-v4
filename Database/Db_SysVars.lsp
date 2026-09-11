@@ -1,6 +1,5 @@
 ;;; ==========================================================================
 ;;; Db_SysVars.lsp - Recommended System Variables & Drawing States Dictionary
-;;; Part of Cad-Setup-v3 Horizontal Layered Architecture
 ;;; Layer: Database (Level 2 - Pure Data)
 ;;; ==========================================================================
 

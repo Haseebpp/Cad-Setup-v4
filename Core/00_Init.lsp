@@ -1,6 +1,5 @@
 ;;; ==========================================================================
 ;;; 00_Init.lsp - Core Environment Initialization & System Path Discovery
-;;; Part of Cad-Setup-v3 Horizontal Layered Architecture
 ;;; Layer: Core (Level 0)
 ;;; ==========================================================================
 
@@ -12,7 +11,7 @@
 
 ;; Configurable fallback path for manual overriding:
 (if (not (boundp '*CAD-SETUP-DIR*))
-  (setq *CAD-SETUP-DIR* "D:\\Cad-Setup-v3")
+  (setq *CAD-SETUP-DIR* "D:\\Cad-Setup-v4")
 )
 
 ;; CadSetup:GetDir
@@ -20,7 +19,7 @@
 ;; 1. Validated user global *CAD-SETUP-DIR*
 ;; 2. Directory containing CAD-SETUP-AUTORUN.lsp
 ;; 3. Directory containing this Core/00_Init.lsp file (ascends one level)
-;; 4. Default fallback: "D:\\Cad-Setup-v3"
+;; 4. Default fallback: "D:\\Cad-Setup-v4"
 (defun CadSetup:GetDir ( / p candidate )
   (cond
     ;; 1. Validated global path
@@ -40,12 +39,12 @@
     ;; 3. Check relative location of 00_Init.lsp (parent directory)
     ((and (setq p (findfile "00_Init.lsp"))
           (setq p (vl-filename-directory p))            ; .../Core
-          (setq p (vl-filename-directory p))            ; .../Cad-Setup-v3
+          (setq p (vl-filename-directory p))            ; .../Cad-Setup-v4
           (vl-file-directory-p p))
      (vl-string-right-trim "\\/" p))
 
     ;; 4. Hardcoded safe default
-    (t "D:\\Cad-Setup-v3")
+    (t "D:\\Cad-Setup-v4")
   )
 )
 

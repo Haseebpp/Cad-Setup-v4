@@ -1,4 +1,4 @@
-# Cad-Setup-v3: Layered / Horizontal Architecture
+# Cad-Setup-v4: Layered / Horizontal Architecture
 
 A clean, traditional, enterprise-grade architecture for AutoCAD AutoLISP/DCL production drafting systems. Every file has a single technical responsibility, zero duplicate helper code, pure data isolation, and strict unidirectional execution flow.
 
@@ -73,7 +73,7 @@ sequenceDiagram
 ## 3. Directory Structure & Technical Responsibilities
 
 ```
-d:\Cad-Setup-v3\
+d:\Cad-Setup-v4\
 ├── CAD-SETUP-AUTORUN.lsp       ; Master orchestrator & APPLOAD entry point
 ├── ARCHITECTURE.md             ; Architectural system diagrams & folder rules
 ├── DEVELOPER-GUIDE.md          ; Practical recipes & coding conventions

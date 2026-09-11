@@ -1,6 +1,5 @@
 ;;; ==========================================================================
 ;;; 03_Blocks.lsp - Auto Block Generators & In-Place Fast Block Transforms
-;;; Part of Cad-Setup-v3 Horizontal Layered Architecture
 ;;; Layer: Commands (Priority 03)
 ;;; Author   : Haseeb
 ;;; ==========================================================================

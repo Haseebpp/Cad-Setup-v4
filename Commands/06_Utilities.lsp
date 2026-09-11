@@ -1,6 +1,5 @@
 ;;; ==========================================================================
 ;;; 06_Utilities.lsp - Drawing Cleanup, Measurement, System Fixes & Utilities
-;;; Part of Cad-Setup-v3 Horizontal Layered Architecture
 ;;; Layer: Commands (Priority 06)
 ;;; Author   : Haseeb
 ;;; ==========================================================================

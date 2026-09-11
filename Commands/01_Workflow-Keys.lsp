@@ -1,6 +1,5 @@
 ;;; ==========================================================================
 ;;; 01_Workflow-Keys.lsp - Numbered Rapid Workflow Keys (1, 2, 3, 4...)
-;;; Part of Cad-Setup-v3 Horizontal Layered Architecture
 ;;; Layer: Commands (Priority 01)
 ;;; Author   : Haseeb
 ;;; ==========================================================================

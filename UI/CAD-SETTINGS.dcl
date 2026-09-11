@@ -1,6 +1,6 @@
 // =============================================================================
 // CAD-SETTINGS.dcl - Static AutoCAD Core System Setup & Ergonomics Manager
-// Part of Cad-Setup-v3 Horizontal Layered Architecture
+// Part of Cad-Setup-v4 Horizontal Layered Architecture
 // Layer: UI (Pure Dialog Control Language Specification)
 // =============================================================================
 

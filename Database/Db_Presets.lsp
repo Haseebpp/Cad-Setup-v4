@@ -1,6 +1,5 @@
 ;;; ==========================================================================
 ;;; Db_Presets.lsp - Master Workspace & Industry Drafting Profiles Dictionary
-;;; Part of Cad-Setup-v3 Horizontal Layered Architecture
 ;;; Layer: Database (Level 2 - Pure Data)
 ;;; ==========================================================================
 

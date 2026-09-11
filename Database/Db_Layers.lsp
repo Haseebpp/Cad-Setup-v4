@@ -1,6 +1,5 @@
 ;;; ==========================================================================
 ;;; Db_Layers.lsp - Master Layer Dictionary & Visual Production Specifications
-;;; Part of Cad-Setup-v3 Horizontal Layered Architecture
 ;;; Layer: Database (Level 2 - Pure Data)
 ;;; ==========================================================================
 

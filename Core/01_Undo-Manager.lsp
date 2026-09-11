@@ -1,6 +1,5 @@
 ;;; ==========================================================================
 ;;; 01_Undo-Manager.lsp - Safe, Re-entrant AutoCAD Undo Transaction Manager
-;;; Part of Cad-Setup-v3 Horizontal Layered Architecture
 ;;; Layer: Core (Level 0)
 ;;; ==========================================================================
 

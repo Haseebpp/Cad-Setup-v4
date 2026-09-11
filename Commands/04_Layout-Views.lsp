@@ -1,6 +1,5 @@
 ;;; ==========================================================================
 ;;; 04_Layout-Views.lsp - Zoom, Views, Annotation Shortcuts & Layout Presentation
-;;; Part of Cad-Setup-v3 Horizontal Layered Architecture
 ;;; Layer: Commands (Priority 04)
 ;;; Author   : Haseeb
 ;;; ==========================================================================

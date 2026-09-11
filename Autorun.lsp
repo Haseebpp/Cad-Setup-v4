@@ -113,9 +113,7 @@
 ;; 3. CORE DRAWING INITIALIZATION ROUTINE (RUNS ON DRAWING OPEN)
 ;; ===========================================================================
 
-(defun CadSetup:Initialize ( / *error* doc dataList row
-                               lName lCol lPlotCol lType lWt lPlot 
-                               lHatch lHScale lHRot lTrans lLocked lDesc )
+(defun CadSetup:Initialize ( / *error* doc )
 
   (vl-load-com)
 
@@ -165,26 +163,7 @@
   ;; -------------------------------------------------------------------------
   ;; B. GENERATE LAYERS FROM DATABASE/Db_Layers.lsp
   ;; -------------------------------------------------------------------------
-  (setq dataList (CadSetup:GetAllLayers))
-  (if dataList
-    (foreach row dataList
-      (setq lName    (if (nth 0 row) (vl-princ-to-string (nth 0 row)) "0")
-            lCol     (if (numberp (nth 1 row)) (nth 1 row) 7)
-            lPlotCol (if (nth 2 row) (vl-princ-to-string (nth 2 row)) "")
-            lType    (if (nth 3 row) (vl-princ-to-string (nth 3 row)) "CONTINUOUS")
-            lWt      (if (numberp (nth 4 row)) (nth 4 row) 25)
-            lPlot    (nth 5 row)
-            lHatch   (if (nth 6 row) (vl-princ-to-string (nth 6 row)) "NONE")
-            lHScale  (if (numberp (nth 7 row)) (nth 7 row) 1.0)
-            lHRot    (if (numberp (nth 8 row)) (nth 8 row) 0.0)
-            lTrans   (if (numberp (nth 9 row)) (nth 9 row) 0)
-            lLocked  (nth 10 row)
-            lDesc    (if (nth 11 row) (vl-princ-to-string (nth 11 row)) ""))
-
-      (CadSetup:EnsureLayer lName lCol lPlotCol lType lWt lPlot 
-                            lHatch lHScale lHRot lTrans lLocked lDesc)
-    )
-  )
+  (CadSetup:LoadAllLayers)
 
   ;; -------------------------------------------------------------------------
   ;; C. TYPOGRAPHY (Annotative & Scalable)
@@ -237,21 +216,14 @@
   ;; -------------------------------------------------------------------------
   ;; E. ENVIRONMENT DEFAULTS & ACTIVE LAYERS
   ;; -------------------------------------------------------------------------
-  (CadSetup:SetCurrentLayerSafe "R-LINE-VISB")
-
-  (if (and (getvar "DIMLAYER") (tblsearch "LAYER" "R-ANNO-DIMS"))
-    (setvar "DIMLAYER" "R-ANNO-DIMS")
-  )
-  (if (and (getvar "HPLAYER") (tblsearch "LAYER" "R-HTCH-GENR"))
-    (setvar "HPLAYER" "R-HTCH-GENR")
-  )
+  (CadSetup:SetDefaultCurrentLayers)
 
   (CadSetup:UndoEnd)
 
   (princ "\n------------------------------------------------------------")
   (princ "\n[✓] Drawing environment initialized with production standards.")
   (princ "\n[✓] Annotative styles, Dimension standards, and Layers generated.")
-  (princ "\n[✓] Commands active: 1=HL, 2=VP, 3=GL, 4=ML, CB, TC, CAD-SETTINGS, RCS")
+  (princ "\n[✓] Commands active: 1=HL, 2=VP, 3=GL, 4=ML, RL, DCL, CB, TC, CAD-SETTINGS, RCS")
   (princ "\n============================================================\n")
   (princ)
 )
@@ -260,5 +232,5 @@
 ;; 4. AUTOMATIC INITIALIZATION ON APPLOAD / STARTUP SUITE
 ;; ===========================================================================
 (CadSetup:Initialize)
-(princ "\n[Loaded]: Autorun ready. Type CAD-SETTINGS to configure or RCS to reload.\n")
+(princ "\n[Loaded]: Autorun ready. Type CAD-SETTINGS to configure, RL to reload layers, or RCS to reload.\n")
 (princ)

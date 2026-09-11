@@ -1,5 +1,5 @@
 ;;; ==========================================================================
-;;; CAD-SETUP-AUTORUN.lsp - Production Architectural & Fitout Drafting System
+;;; Autorun.lsp - Production Architectural & Fitout Drafting System
 ;;; Automatic Initialization File for AutoCAD APPLOAD / Startup Suite
 ;;; Architecture  : Layered / Horizontal (Core -> Helpers -> Database -> Commands -> UI)
 ;;; Commands      : RELOAD-COMMAND-SUITES, RCS, LOAD-COMMANDS
@@ -12,21 +12,16 @@
 ;; ===========================================================================
 
 ;; CadSetup:GetDir - Dynamic discovery of Cad-Setup root folder
-(defun CadSetup:GetDir ( / p candidate )
-  (cond
-    ;; 1. Folder containing CAD-SETUP-AUTORUN.lsp (Dynamic discovery)
-    ((and (setq p (findfile "CAD-SETUP-AUTORUN.lsp"))
-          (setq p (vl-filename-directory p))
-          (vl-file-directory-p p))
-     (vl-string-right-trim "\\/" p))
-
-    ;; 2. Optional manual override path (if set externally)
-    ((and (boundp '*CAD-SETUP-DIR*)
-          *CAD-SETUP-DIR*
-          (= (type *CAD-SETUP-DIR*) 'STR)
-          (setq candidate (vl-string-right-trim "\\/" *CAD-SETUP-DIR*))
-          (vl-file-directory-p candidate))
-     candidate)
+(defun CadSetup:GetDir ( / p )
+  (if (and (setq p (findfile "Autorun.lsp"))
+           (setq p (vl-filename-directory p))
+           (vl-file-directory-p p))
+    (vl-string-right-trim "\\/" p)
+    (progn
+      (princ "\n[CadSetup ✖ Error]: System path resolution failed. Could not locate 'Autorun.lsp'.")
+      (princ "\nPlease add 'Autorun.lsp' to AutoCAD APPLOAD (Startup Suite) or Support File Search Paths.")
+      nil
+    )
   )
 )
 
@@ -83,7 +78,7 @@
 (defun LOAD-COMMAND-SUITES ( / totalLoaded )
   (vl-load-com)
   (princ "\n============================================================")
-  (princ "\n  CAD-SETUP-AUTORUN: INITIALIZING HORIZONTAL ARCHITECTURE   ")
+  (princ "\n  AUTORUN: INITIALIZING HORIZONTAL ARCHITECTURE             ")
   (princ "\n  Execution Flow: Core -> Helpers -> Database -> Commands -> UI")
   (princ "\n============================================================")
 
@@ -265,5 +260,5 @@
 ;; 4. AUTOMATIC INITIALIZATION ON APPLOAD / STARTUP SUITE
 ;; ===========================================================================
 (CadSetup:Initialize)
-(princ "\n[Loaded]: CAD-SETUP-AUTORUN ready. Type CAD-SETTINGS to configure or RCS to reload.\n")
+(princ "\n[Loaded]: Autorun ready. Type CAD-SETTINGS to configure or RCS to reload.\n")
 (princ)

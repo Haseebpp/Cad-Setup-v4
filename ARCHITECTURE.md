@@ -40,20 +40,20 @@ graph TD
 
 ## 2. Startup & Execution Flow
 
-When AutoCAD loads `CAD-SETUP-AUTORUN.lsp` (via `APPLOAD` or the Startup Suite), the following sequential lifecycle executes:
+When AutoCAD loads `Autorun.lsp` (via `APPLOAD` or the Startup Suite), the following sequential lifecycle executes:
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant ACAD as AutoCAD Engine
-    participant Auto as CAD-SETUP-AUTORUN.lsp
+    participant Auto as Autorun.lsp
     participant Core as Core/
     participant Help as Helpers/
     participant Db as Database/
     participant Cmd as Commands/
     participant UI as UI/
 
-    ACAD->>Auto: Load CAD-SETUP-AUTORUN.lsp
+    ACAD->>Auto: Load Autorun.lsp
     Auto->>Core: 1. Load 00_Init.lsp & 01_Undo-Manager.lsp
     Auto->>Help: 2. Load Help_ActiveX, Help_Selection, Help_Geometry, Help_Layers
     Auto->>Db: 3. Load Db_Layers, Db_SysVars, Db_Presets (Pure Data)
@@ -74,7 +74,7 @@ sequenceDiagram
 
 ```
 d:\Cad-Setup-v4\
-├── CAD-SETUP-AUTORUN.lsp       ; Master orchestrator & APPLOAD entry point
+├── Autorun.lsp                 ; Master orchestrator & APPLOAD entry point
 ├── ARCHITECTURE.md             ; Architectural system diagrams & folder rules
 ├── DEVELOPER-GUIDE.md          ; Practical recipes & coding conventions
 ├── Core/

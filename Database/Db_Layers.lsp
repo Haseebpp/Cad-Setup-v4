@@ -10,9 +10,9 @@
 (setq *CadSetup-Layers-Data* '(
 
   ;; Utilities
-  ("1-HELP-LINE"       6   "180,0,180"   "CONTINUOUS"  5   nil  "NONE"      1.0  0.0  0   nil  "Color 6 (Magenta): Construction Lines — Auxiliary guides, temporary offsets, alignment rays (Non-Plotting)")
-  ("2-VIEW-PORT"       6   "180,0,180"   "CONTINUOUS"  5   nil  "NONE"      1.0  0.0  0   nil  "Color 6 (Magenta): Viewports — Layout viewport frames and detail sheet cutouts (Non-Plotting)")
-  ("3-GRID-LINE"       8   "100,100,100" "CONTINUOUS"  18  T    "NONE"      1.0  0.0  0   nil  "Color 8 (Dark Gray): Structural Grid — Primary building grid lines and column datums")
+  ("01-HELP-LINE"       6   "180,0,180"   "CONTINUOUS"  5   nil  "NONE"      1.0  0.0  0   nil  "Color 6 (Magenta): Construction Lines — Auxiliary guides, temporary offsets, alignment rays (Non-Plotting)")
+  ("02-VIEW-PORT"       6   "180,0,180"   "CONTINUOUS"  5   nil  "NONE"      1.0  0.0  0   nil  "Color 6 (Magenta): Viewports — Layout viewport frames and detail sheet cutouts (Non-Plotting)")
+  ("03-GRID-LINE"       8   "100,100,100" "CONTINUOUS"  18  T    "NONE"      1.0  0.0  0   nil  "Color 8 (Dark Gray): Structural Grid — Primary building grid lines and column datums")
 
   ;; Annotations
   ("R-ANNO-DIMS"        20  "180,75,0"    "CONTINUOUS"  18  T    "NONE"      1.0  0.0  0   nil  "Color 20 (Orange/Tan): Dimensions — Primary and secondary dimension strings, overall gauges")

@@ -279,5 +279,7 @@
   (princ)
 )
 
-(princ "\n[06_Utilities.lsp] Productivity utilities and system repair tools loaded.")
+(if *CadSetup-Debug*
+  (princ "\n[06_Utilities.lsp] Productivity utilities and system repair tools loaded.")
+)
 (princ)

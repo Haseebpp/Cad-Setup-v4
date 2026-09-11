@@ -44,5 +44,7 @@
 )
 (defun c:RSV () (c:APPLY-SYSVARS))
 
-(princ "\n[00_System-Variables.lsp] Drafter environment & system variables optimized.")
+(if *CadSetup-Debug*
+  (princ "\n[00_System-Variables.lsp] Drafter environment & system variables optimized.")
+)
 (princ)

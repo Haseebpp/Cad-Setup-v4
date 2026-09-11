@@ -149,5 +149,7 @@
   )
 )
 
-(princ "\n[Helpers/Help_Geometry.lsp] Geometry, bounding box & curve math loaded.")
+(if *CadSetup-Debug*
+  (princ "\n[Helpers/Help_Geometry.lsp] Geometry, bounding box & curve math loaded.")
+)
 (princ)

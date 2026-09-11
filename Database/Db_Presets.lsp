@@ -334,5 +334,7 @@
   )
 )
 
-(princ "\n[Database/Db_Presets.lsp] Workspace & Industry Presets loaded.")
+(if *CadSetup-Debug*
+  (princ "\n[Database/Db_Presets.lsp] Workspace & Industry Presets loaded.")
+)
 (princ)

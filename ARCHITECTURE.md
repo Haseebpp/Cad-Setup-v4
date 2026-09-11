@@ -65,7 +65,7 @@ sequenceDiagram
     Auto->>Help: EnsureLayer for each of 33+ Production Layers
     Auto->>ACAD: Setup Typography (ARCH-TEXT) & Dimstyles (ARCH-TICK)
     Auto->>ACAD: Set Defaults (CLAYER=R-LINE-VISB, DIMLAYER, HPLAYER)
-    Auto-->>ACAD: Initialization Complete [✓]
+    Auto-->>ACAD: Initialization Complete [OK]
 ```
 
 ---

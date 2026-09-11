@@ -177,6 +177,12 @@ Whenever you write a new command in `Commands/`, always use this battle-tested t
 
 ## 5. Troubleshooting & FAQ
 
+**Q: How do I enable detailed diagnostic / verbose logging during startup?**
+- Type `CAD-SETUP-DEBUG` (or `CS-DEBUG`) at the AutoCAD command line to toggle verbose logging. When enabled, running `RCS` will display each tier and file being loaded with `[OK]` status.
+
+**Q: What is the logging standard for console messages?**
+- To avoid codepage character corruption (`âœ“`), never print multi-byte Unicode characters (such as `✓` or `✖`). Always use the standard ASCII logging functions: `(CadSetup:LogSuccess "...")` `[OK]`, `(CadSetup:LogWarn "...")` `[WARN]`, `(CadSetup:LogError "...")` `[ERR]`, and `(CadSetup:LogDebug "...")`.
+
 **Q: AutoCAD reports "CAD-SETTINGS.dcl not found".**
 - Ensure `d:\Cad-Setup-v4` is added to AutoCAD's Support File Search Path (`OPTIONS` $\rightarrow$ `Files` $\rightarrow$ `Support File Search Path`), or verify `CadSetup:GetDir` returns `D:\Cad-Setup-v4`.
 

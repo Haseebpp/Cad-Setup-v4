@@ -119,5 +119,7 @@
   (princ)
 )
 
-(princ "\n[04_Layout-Views.lsp] View navigation, dimensions, and layout tools loaded.")
+(if *CadSetup-Debug*
+  (princ "\n[04_Layout-Views.lsp] View navigation, dimensions, and layout tools loaded.")
+)
 (princ)

@@ -86,5 +86,7 @@
   (princ)
 )
 
-(princ "\n[Core/01_Undo-Manager.lsp] Re-entrant Undo transaction manager loaded.")
+(if *CadSetup-Debug*
+  (princ "\n[Core/01_Undo-Manager.lsp] Re-entrant Undo transaction manager loaded.")
+)
 (princ)

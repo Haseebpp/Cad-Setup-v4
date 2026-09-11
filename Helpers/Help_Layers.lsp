@@ -231,5 +231,7 @@
   )
 )
 
-(princ "\n[Helpers/Help_Layers.lsp] Safe Layer & Linetype management loaded.")
+(if *CadSetup-Debug*
+  (princ "\n[Helpers/Help_Layers.lsp] Safe Layer & Linetype management loaded.")
+)
 (princ)

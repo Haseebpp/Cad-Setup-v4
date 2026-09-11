@@ -10,25 +10,48 @@
 ;; CONSOLE LOGGING & DIAGNOSTIC UTILITIES
 ;; ===========================================================================
 
+;; Global diagnostic verbosity switch (default: quiet/silent)
+(if (null *CadSetup-Debug*)
+  (setq *CadSetup-Debug* nil)
+)
+
 (defun CadSetup:Log (msg)
   (if msg (princ (strcat "\n[CadSetup] " msg)))
   (princ)
 )
 
 (defun CadSetup:LogSuccess (msg)
-  (if msg (princ (strcat "\n[CadSetup ✓] " msg)))
+  (if msg (princ (strcat "\n[CadSetup OK] " msg)))
   (princ)
 )
 
 (defun CadSetup:LogWarn (msg)
-  (if msg (princ (strcat "\n[CadSetup ⚠ Warning]: " msg)))
+  (if msg (princ (strcat "\n[CadSetup WARN]: " msg)))
   (princ)
 )
 
 (defun CadSetup:LogError (msg)
-  (if msg (princ (strcat "\n[CadSetup ✖ Error]: " msg)))
+  (if msg (princ (strcat "\n[CadSetup ERR]: " msg)))
   (princ)
 )
+
+(defun CadSetup:LogDebug (msg)
+  (if (and *CadSetup-Debug* msg)
+    (princ (strcat "\n[CadSetup DEBUG] " msg))
+  )
+  (princ)
+)
+
+;; Command to toggle diagnostic verbosity
+(defun c:CAD-SETUP-DEBUG ()
+  (setq *CadSetup-Debug* (not *CadSetup-Debug*))
+  (if *CadSetup-Debug*
+    (princ "\n[CadSetup DEBUG]: Diagnostic mode enabled (verbose logging ON).")
+    (princ "\n[CadSetup DEBUG]: Diagnostic mode disabled (quiet logging ON).")
+  )
+  (princ)
+)
+(defun c:CS-DEBUG () (c:CAD-SETUP-DEBUG))
 
 ;; ===========================================================================
 ;; ENVIRONMENT & CAPABILITY CHECKS
@@ -54,5 +77,7 @@
   )
 )
 
-(princ "\n[Core/00_Init.lsp] Core environment & diagnostic utilities initialized.")
+(if *CadSetup-Debug*
+  (princ "\n[Core/00_Init.lsp] Core environment & diagnostic utilities initialized.")
+)
 (princ)

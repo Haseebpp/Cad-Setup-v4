@@ -132,5 +132,7 @@
 (defun c:QS  () (command "_.QSAVE")       (princ)) ; QS  -> Quick Save current drawing without prompt
 (defun c:CL  () (command "_.CLOSE")       (princ)) ; CL  -> Close current active drawing window
 
-(princ "\n[99_Aliases.lsp] Consolidated personal aliases loaded successfully.")
+(if *CadSetup-Debug*
+  (princ "\n[99_Aliases.lsp] Consolidated personal aliases loaded successfully.")
+)
 (princ)

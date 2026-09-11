@@ -35,5 +35,7 @@
 (defun c:SW  () (CadSetup:FilterSelection "SW"  "WIPEOUT"            T   "Wipeout"))
 (defun c:SWI () (CadSetup:FilterSelection "SWI" "WIPEOUT"            nil "Wipeout"))
 
-(princ "\n[05_Selection-Filters.lsp] Smart selection filter shortcuts loaded.")
+(if *CadSetup-Debug*
+  (princ "\n[05_Selection-Filters.lsp] Smart selection filter shortcuts loaded.")
+)
 (princ)

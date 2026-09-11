@@ -108,5 +108,7 @@
   (max min-val (min max-val val))
 )
 
-(princ "\n[Helpers/Help_ActiveX.lsp] Safe ActiveX & SysVar helpers loaded.")
+(if *CadSetup-Debug*
+  (princ "\n[Helpers/Help_ActiveX.lsp] Safe ActiveX & SysVar helpers loaded.")
+)
 (princ)

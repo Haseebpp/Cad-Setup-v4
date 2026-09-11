@@ -591,5 +591,7 @@
 
 (defun c:CADSETTINGS () (c:CAD-SETTINGS))
 
-(princ "\n[UI/CAD-SETTINGS-CTRL.lsp] Settings Dialog Controller loaded. Type CAD-SETTINGS to launch.")
+(if *CadSetup-Debug*
+  (princ "\n[UI/CAD-SETTINGS-CTRL.lsp] Settings Dialog Controller loaded. Type CAD-SETTINGS to launch.")
+)
 (princ)

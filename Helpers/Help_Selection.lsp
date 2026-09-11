@@ -146,5 +146,7 @@
   (princ)
 )
 
-(princ "\n[Helpers/Help_Selection.lsp] Selection filter & iteration engine loaded.")
+(if *CadSetup-Debug*
+  (princ "\n[Helpers/Help_Selection.lsp] Selection filter & iteration engine loaded.")
+)
 (princ)

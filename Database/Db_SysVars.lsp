@@ -90,5 +90,7 @@
   *CadSetup-SysVars-Data*
 )
 
-(princ "\n[Database/Db_SysVars.lsp] System Variables Dictionary loaded.")
+(if *CadSetup-Debug*
+  (princ "\n[Database/Db_SysVars.lsp] System Variables Dictionary loaded.")
+)
 (princ)

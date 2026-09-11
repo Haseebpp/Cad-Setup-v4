@@ -78,5 +78,7 @@
   )
 )
 
-(princ "\n[Database/Db_Layers.lsp] Master Layer Dictionary loaded.")
+(if *CadSetup-Debug*
+  (princ "\n[Database/Db_Layers.lsp] Master Layer Dictionary loaded.")
+)
 (princ)

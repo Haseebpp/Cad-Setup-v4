@@ -18,7 +18,7 @@
            (vl-file-directory-p p))
     (vl-string-right-trim "\\/" p)
     (progn
-      (princ "\n[CadSetup ✖ Error]: System path resolution failed. Could not locate 'Autorun.lsp'.")
+      (princ "\n[CadSetup ERR]: System path resolution failed. Could not locate 'Autorun.lsp'.")
       (princ "\nPlease add 'Autorun.lsp' to AutoCAD APPLOAD (Startup Suite) or Support File Search Paths.")
       nil
     )
@@ -30,8 +30,10 @@
 ;; ===========================================================================
 
 ;; Helper: Loads all *.lsp files from a subdirectory sorted alphabetically
+;; Returns list: (successCount errorCount)
 (defun CadSetup:LoadFolder (subDirName label / baseDir folderPath files fName fullPath res count errCount)
   (setq baseDir (CadSetup:GetDir))
+  (setq count 0 errCount 0)
   (if (and baseDir (vl-file-directory-p baseDir))
     (progn
       (setq folderPath (strcat baseDir "\\" subDirName))
@@ -39,9 +41,10 @@
         (progn
           (setq files (vl-directory-files folderPath "*.lsp" 1))
           (setq files (vl-sort files (function (lambda (a b) (< (strcase a) (strcase b))))))
-          (setq count 0 errCount 0)
 
-          (princ (strcat "\n[" label "] Loading: " folderPath))
+          (if *CadSetup-Debug*
+            (princ (strcat "\n[" label "] Loading: " folderPath))
+          )
           (while files
             (setq fName    (car files)
                   files    (cdr files)
@@ -50,81 +53,116 @@
             (if (vl-catch-all-error-p res)
               (progn
                 (setq errCount (1+ errCount))
-                (princ (strcat "\n  [✖] Error in " fName ": " (vl-catch-all-error-message res)))
+                (princ (strcat "\n[CadSetup ERR] Failed loading " fName ": " (vl-catch-all-error-message res)))
               )
               (progn
                 (setq count (1+ count))
-                (princ (strcat "\n  [✓] " fName))
+                (if *CadSetup-Debug*
+                  (princ (strcat "\n  [OK] " fName))
+                )
               )
             )
           )
-          count
         )
         (progn
-          (princ (strcat "\n[" label "] Notice: Directory '" folderPath "' not found."))
-          0
+          (princ (strcat "\n[CadSetup WARN]: Directory '" folderPath "' not found."))
         )
       )
     )
     (progn
-      (princ (strcat "\n[" label "] Error: Base directory not found."))
-      0
+      (princ (strcat "\n[CadSetup ERR]: Base directory not found."))
     )
   )
+  (list count errCount)
+)
+
+;; Banner Presentation: Clean, compact 4-line status summary
+(defun CadSetup:PrintBanner (errCount / )
+  (princ "\n----------------------------------------------------------------")
+  (if (> errCount 0)
+    (princ "\n CadSetup v4.0 - Architectural & Fitout Drafting Suite [WARN]")
+    (princ "\n CadSetup v4.0 - Architectural & Fitout Drafting Suite [OK]")
+  )
+  (princ "\n Standards : Production Layers, Linetypes, & Dimstyles Active")
+  (princ "\n Shortcuts : CAD-SETTINGS | RL (Reload Layers) | RCS | Keys: 1-4")
+  (if (> errCount 0)
+    (princ (strcat "\n Notice    : " (itoa errCount) " module(s) had load errors. Type CAD-SETUP-DEBUG and RCS to inspect."))
+  )
+  (princ "\n----------------------------------------------------------------\n")
+  (princ)
 )
 
 ;; Master Loader: Executes horizontal tiers in exact dependency order:
 ;; Core -> Helpers -> Database -> Commands -> UI
-(defun LOAD-COMMAND-SUITES ( / totalLoaded )
+;; Returns list: (totalLoaded totalErrors)
+(defun LOAD-COMMAND-SUITES ( / res1 res2 res3 res4 res5 totalLoaded totalErrors )
   (vl-load-com)
-  (princ "\n============================================================")
-  (princ "\n  AUTORUN: INITIALIZING HORIZONTAL ARCHITECTURE             ")
-  (princ "\n  Execution Flow: Core -> Helpers -> Database -> Commands -> UI")
-  (princ "\n============================================================")
+  (if *CadSetup-Debug*
+    (progn
+      (princ "\n============================================================")
+      (princ "\n  AUTORUN: INITIALIZING HORIZONTAL ARCHITECTURE             ")
+      (princ "\n  Execution Flow: Core -> Helpers -> Database -> Commands -> UI")
+      (princ "\n============================================================")
+    )
+  )
 
   ;; 1. Core Layer (Level 0: Path, error handling, undo manager)
-  (CadSetup:LoadFolder "Core" "1. Core Layer")
+  (setq res1 (CadSetup:LoadFolder "Core" "1. Core Layer"))
 
   ;; 2. Helpers Layer (Level 1: Safe COM, selection, geometry, layers)
-  (CadSetup:LoadFolder "Helpers" "2. Helpers Layer")
+  (setq res2 (CadSetup:LoadFolder "Helpers" "2. Helpers Layer"))
 
   ;; 3. Database Layer (Level 2: Pure data dictionaries - layers, sysvars, presets)
-  (CadSetup:LoadFolder "Database" "3. Database Layer")
+  (setq res3 (CadSetup:LoadFolder "Database" "3. Database Layer"))
 
   ;; 4. Commands Layer (Level 3: Ergonomic drafting keys, blocks, utilities, aliases)
-  (CadSetup:LoadFolder "Commands" "4. Commands Layer")
+  (setq res4 (CadSetup:LoadFolder "Commands" "4. Commands Layer"))
 
   ;; 5. UI Layer (Level 4: Dialog controls, preview canvas, presets GUI)
-  (CadSetup:LoadFolder "UI" "5. UI Layer")
+  (setq res5 (CadSetup:LoadFolder "UI" "5. UI Layer"))
 
-  (princ "\n------------------------------------------------------------")
-  (princ "\n[✓] All horizontal architecture suites loaded successfully.")
-  (princ "\n============================================================\n")
-  (princ)
+  (setq totalLoaded (+ (car res1) (car res2) (car res3) (car res4) (car res5)))
+  (setq totalErrors (+ (cadr res1) (cadr res2) (cadr res3) (cadr res4) (cadr res5)))
+
+  (if *CadSetup-Debug*
+    (progn
+      (princ "\n------------------------------------------------------------")
+      (princ (strcat "\n[OK] " (itoa totalLoaded) " horizontal architecture files loaded."))
+      (if (> totalErrors 0)
+        (princ (strcat "\n[WARN] " (itoa totalErrors) " error(s) encountered during load."))
+      )
+      (princ "\n============================================================\n")
+    )
+  )
+  (list totalLoaded totalErrors)
 )
 
 ;; Command Aliases for reloading
-(defun c:RELOAD-COMMAND-SUITES () (LOAD-COMMAND-SUITES))
-(defun c:RCS () (LOAD-COMMAND-SUITES))
-(defun c:LOAD-COMMANDS () (LOAD-COMMAND-SUITES))
+(defun c:RELOAD-COMMAND-SUITES ( / res )
+  (setq res (LOAD-COMMAND-SUITES))
+  (CadSetup:PrintBanner (cadr res))
+  (princ)
+)
+(defun c:RCS () (c:RELOAD-COMMAND-SUITES))
+(defun c:LOAD-COMMANDS () (c:RELOAD-COMMAND-SUITES))
 
 
 ;; ===========================================================================
 ;; 3. CORE DRAWING INITIALIZATION ROUTINE (RUNS ON DRAWING OPEN)
 ;; ===========================================================================
 
-(defun CadSetup:Initialize ( / *error* doc )
+(defun CadSetup:Initialize ( / *error* doc loadRes )
 
   (vl-load-com)
 
   ;; First, load all architecture layers so all helpers & database are active
-  (LOAD-COMMAND-SUITES)
+  (setq loadRes (LOAD-COMMAND-SUITES))
 
   ;; Scoped local error handler
   (defun *error* (msg)
     (CadSetup:UndoReset)
     (if (and msg (not (wcmatch (strcase msg) "*CANCEL*,*QUIT*")))
-      (princ (strcat "\n[CadSetup Error]: " msg))
+      (princ (strcat "\n[CadSetup ERR]: " msg))
     )
     (princ)
   )
@@ -132,7 +170,9 @@
   (CadSetup:UndoStart)
   (setvar "CMDECHO" 0)
 
-  (princ "\nGenerating production layer standards and styles...")
+  (if *CadSetup-Debug*
+    (princ "\nGenerating production layer standards and styles...")
+  )
 
   ;; -------------------------------------------------------------------------
   ;; A. LOAD STANDARD LINETYPES
@@ -219,11 +259,7 @@
 
   (CadSetup:UndoEnd)
 
-  (princ "\n------------------------------------------------------------")
-  (princ "\n[✓] Drawing environment initialized with production standards.")
-  (princ "\n[✓] Annotative styles, Dimension standards, and Layers generated.")
-  (princ "\n[✓] Commands active: 1=HL, 2=VP, 3=GL, 4=ML, RL, DCL, CB, TC, CAD-SETTINGS, RCS")
-  (princ "\n============================================================\n")
+  (CadSetup:PrintBanner (cadr loadRes))
   (princ)
 )
 
@@ -231,5 +267,3 @@
 ;; 4. AUTOMATIC INITIALIZATION ON APPLOAD / STARTUP SUITE
 ;; ===========================================================================
 (CadSetup:Initialize)
-(princ "\n[Loaded]: Autorun ready. Type CAD-SETTINGS to configure, RL to reload layers, or RCS to reload.\n")
-(princ)

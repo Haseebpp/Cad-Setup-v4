@@ -144,7 +144,7 @@
   (CadSetup:UndoStart)
   (princ "\n[RL] Loading and synchronizing production layers from database...")
   (setq count (CadSetup:LoadAllLayers))
-  (princ (strcat "\n[✓] " (itoa count) " production layers verified and loaded."))
+  (princ (strcat "\n[OK] " (itoa count) " production layers verified and loaded."))
 
   ;; Interactive prompt to set default active layers
   (initget "Yes No")
@@ -152,7 +152,7 @@
   (if (or (null ans) (= ans "Yes"))
     (progn
       (CadSetup:SetDefaultCurrentLayers)
-      (princ (strcat "\n[✓] Configured default active layers enforced (CLAYER: \"" (getvar "CLAYER") "\")."))
+      (princ (strcat "\n[OK] Configured default active layers enforced (CLAYER: \"" (getvar "CLAYER") "\")."))
     )
     (progn
       (setq curLay (getvar "CLAYER"))
@@ -184,12 +184,12 @@
   (CadSetup:UndoEnd)
 
   (princ "\n[DCL] Default active layers enforced:")
-  (princ (strcat "\n  [✓] CLAYER   : \"" (getvar "CLAYER") "\""))
+  (princ (strcat "\n  [OK] CLAYER   : \"" (getvar "CLAYER") "\""))
   (if (getvar "DIMLAYER")
-    (princ (strcat "\n  [✓] DIMLAYER : \"" (getvar "DIMLAYER") "\""))
+    (princ (strcat "\n  [OK] DIMLAYER : \"" (getvar "DIMLAYER") "\""))
   )
   (if (getvar "HPLAYER")
-    (princ (strcat "\n  [✓] HPLAYER  : \"" (getvar "HPLAYER") "\""))
+    (princ (strcat "\n  [OK] HPLAYER  : \"" (getvar "HPLAYER") "\""))
   )
   (princ)
 )
@@ -281,7 +281,7 @@
   (setq dataList (CadSetup:GetAllLayers))
   (if (null dataList)
     (progn
-      (princ "\n[BLL ✖ Error]: Master layer data not found in Database/Db_Layers.lsp.")
+      (princ "\n[BLL ERR]: Master layer data not found in Database/Db_Layers.lsp.")
       nil
     )
     (progn
@@ -586,7 +586,7 @@
   (princ (strcat "\n[BLL] Generating Layer Legend at " (rtos (car insPt) 2 1) ", " (rtos (cadr insPt) 2 1)
                  " (Scale: " scName ", Multiplier: " (rtos sc 2 2) "x)..."))
   (if (CadSetup:GenerateLayerLegend insPt sc)
-    (princ (strcat "\n[✓] Layer Legend generated successfully. (Table width: "
+    (princ (strcat "\n[OK] Layer Legend generated successfully. (Table width: "
                    (rtos (* 350.0 sc) 2 1) " mm)"))
   )
 
@@ -606,6 +606,8 @@
 (defun c:BLL () (c:BUILD-LAYER-LEGEND))
 (defun c:LAYER-LEGEND () (c:BUILD-LAYER-LEGEND))
 
-(princ "\n[02_Layers.lsp] Production layer management and shortcuts loaded (RL, DCL, L0, BLL).")
+(if *CadSetup-Debug*
+  (princ "\n[02_Layers.lsp] Production layer management and shortcuts loaded (RL, DCL, L0, BLL).")
+)
 (princ)
 

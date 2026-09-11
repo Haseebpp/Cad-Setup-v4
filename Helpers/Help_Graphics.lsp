@@ -288,5 +288,7 @@
   )
 )
 
-(princ "\n[Helpers/Help_Graphics.lsp] 2D graphics primitives, text, hatch & draw order loaded.")
+(if *CadSetup-Debug*
+  (princ "\n[Helpers/Help_Graphics.lsp] 2D graphics primitives, text, hatch & draw order loaded.")
+)
 (princ)

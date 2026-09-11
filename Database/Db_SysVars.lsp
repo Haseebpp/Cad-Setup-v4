@@ -72,7 +72,7 @@
   ("CECOLOR"            "BYLAYER"  "Display"     "Current entity color ByLayer")
   ("CELTYPE"            "BYLAYER"  "Display"     "Current entity linetype ByLayer")
   ("DRAWORDERCTL"       3          "Display"     "Full draw order display inheritance enabled")
-  ("LAYLOCKFADECTL"      50         "Display"     "50% contrast dimming on locked background layers")
+  ("LAYLOCKFADECTL"     50         "Display"     "50% contrast dimming on locked background layers")
 
   ;; -------------------------------------------------------------------------
   ;; 6. Performance & Visual Optimization

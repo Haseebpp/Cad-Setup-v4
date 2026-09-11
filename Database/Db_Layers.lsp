@@ -3,36 +3,18 @@
 ;;; Layer: Database (Level 2 - Pure Data)
 ;;; ==========================================================================
 
-;; ===========================================================================
-;; MASTER LAYER SPECIFICATION TABLE
-;; Format:
-;; (
-;;   0: Layer Name (string)
-;;   1: Layer Color ACI (integer 1-255)
-;;   2: RGB Plot Color (string "R,G,B")
-;;   3: Linetype Name (string)
-;;   4: Lineweight in 0.01 mm (integer, e.g. 25 = 0.25mm)
-;;   5: Plottable (T / nil)
-;;   6: Hatch Pattern (string)
-;;   7: Hatch Scale (real)
-;;   8: Hatch Rotation degrees (real)
-;;   9: Transparency percentage (integer 0-90)
-;;  10: Locked by Default (T / nil)
-;;  11: Layer Description (string)
-;; )
-;; ===========================================================================
-
+;; ==============================================================================
+;; Master Data Definition
+;; Format: (Layer Name | Layer Color (ACI) | Plot Color (RGB) | Linetype | Lineweight (0.01 mm) | Plot (T/nil) | Hatch Pattern | Hatch Scale | Hatch Rotation (deg) | Transparency (%) | Locked (T/nil) | Description)
+;; ==============================================================================
 (setq *CadSetup-Layers-Data* '(
-  ;; -------------------------------------------------------------------------
-  ;; 1. Utilities & Alignment
-  ;; -------------------------------------------------------------------------
-  ("01-HELP-LINE"       6   "180,0,180"   "CONTINUOUS"  5   nil  "NONE"      1.0  0.0  0   nil  "Color 6 (Magenta): Construction Lines — Auxiliary guides, temporary offsets, alignment rays (Non-Plotting)")
-  ("02-VIEW-PORT"       6   "180,0,180"   "CONTINUOUS"  5   nil  "NONE"      1.0  0.0  0   nil  "Color 6 (Magenta): Viewports — Layout viewport frames and detail sheet cutouts (Non-Plotting)")
-  ("03-GRID-LINE"       8   "100,100,100" "CONTINUOUS"  18  T    "NONE"      1.0  0.0  0   nil  "Color 8 (Dark Gray): Structural Grid — Primary building grid lines and column datums")
 
-  ;; -------------------------------------------------------------------------
-  ;; 2. Annotations & Detailing
-  ;; -------------------------------------------------------------------------
+  ;; Utilities
+  ("1-HELP-LINE"       6   "180,0,180"   "CONTINUOUS"  5   nil  "NONE"      1.0  0.0  0   nil  "Color 6 (Magenta): Construction Lines — Auxiliary guides, temporary offsets, alignment rays (Non-Plotting)")
+  ("2-VIEW-PORT"       6   "180,0,180"   "CONTINUOUS"  5   nil  "NONE"      1.0  0.0  0   nil  "Color 6 (Magenta): Viewports — Layout viewport frames and detail sheet cutouts (Non-Plotting)")
+  ("3-GRID-LINE"       8   "100,100,100" "CONTINUOUS"  18  T    "NONE"      1.0  0.0  0   nil  "Color 8 (Dark Gray): Structural Grid — Primary building grid lines and column datums")
+
+  ;; Annotations
   ("R-ANNO-DIMS"        20  "180,75,0"    "CONTINUOUS"  18  T    "NONE"      1.0  0.0  0   nil  "Color 20 (Orange/Tan): Dimensions — Primary and secondary dimension strings, overall gauges")
   ("R-ANNO-EQMT"        130 "0,120,130"   "CONTINUOUS"  25  T    "NONE"      1.0  0.0  0   nil  "Color 130 (Teal): Equipment Tags — Joinery & appliance equipment tags, hardware codes")
   ("R-ANNO-LEDR"        252 "80,80,80"    "CONTINUOUS"  15  T    "NONE"      1.0  0.0  0   nil  "Color 252 (Pale Gray): Leaders — Multileader lines, pointers, item balloon callout lines")
@@ -43,38 +25,28 @@
   ("R-ANNO-SPEC"        3   "0,120,50"    "CONTINUOUS"  25  T    "NONE"      1.0  0.0  0   nil  "Color 3 (Green): Specification Text — General specification callouts, finish tags")
   ("R-ANNO-TTLB"        7   "0,0,0"       "CONTINUOUS"  35  T    "NONE"      1.0  0.0  0   T    "Color 7 (White/Black): Titleblock Border — Title block geometry, border frame (Locked: Yes)")
 
-  ;; -------------------------------------------------------------------------
-  ;; 3. Electrical & MEP
-  ;; -------------------------------------------------------------------------
+  ;; Electrical
   ("R-ELEC-LIGHTING"    5   "0,80,190"    "CONTINUOUS"  25  T    "NONE"      1.0  0.0  0   nil  "Color 5 (Blue): Lighting — LED strip profiles, puck lights, driver housings, wire channels")
   ("R-ELEC-WIRING"      221 "120,30,155"  "PHANTOM2"    18  T    "NONE"      1.0  0.0  0   nil  "Color 221 (Violet): Wiring Path — Power feeds, conduit paths, driver connection routes")
 
-  ;; -------------------------------------------------------------------------
-  ;; 4. Hardware & Fittings
-  ;; -------------------------------------------------------------------------
+  ;; Hardware
   ("R-HARD-FITTINGS"    252 "90,95,105"   "CONTINUOUS"  18  T    "NONE"      1.0  0.0  0   nil  "Color 252 (Pale Gray): Hardware Fittings — Concealed hinges, brackets, minifix connectors")
   ("R-HARD-HANDLES"     210 "145,25,115"  "CONTINUOUS"  25  T    "NONE"      1.0  0.0  0   nil  "Color 210 (Magenta/Violet): Hardware Handles — Exposed handles, edge pulls, knobs profiles")
   ("R-HARD-LOCKS"       212 "160,20,90"   "CONTINUOUS"  18  T    "NONE"      1.0  0.0  0   nil  "Color 212 (Magenta): Locks & Security — Cam locks, electronic card locks, espagnolette bolts")
   ("R-HARD-RUNNERS"     252 "85,90,100"   "CONTINUOUS"  25  T    "NONE"      1.0  0.0  0   nil  "Color 252 (Pale Gray): Hardware Runners — Drawer slides, soft-close mechanisms, sliding tracks")
 
-  ;; -------------------------------------------------------------------------
-  ;; 5. Hatches & Fills
-  ;; -------------------------------------------------------------------------
+  ;; Hatches
   ("R-HTCH-GENR"        8   "130,130,130" "CONTINUOUS"  5   T    "ANSI31"    1.0  0.0  40  nil  "Color 8 (Dark Gray): General Hatch — Generic pattern lines, section cross-hatching, surface fills")
   ("R-HTCH-SOLI"        250 "30,30,30"    "CONTINUOUS"  5   T    "SOLID"     1.0  0.0  50  nil  "Color 250 (Black): Solid Fill — Solid surface fills, tonal shading, opaque fills")
 
-  ;; -------------------------------------------------------------------------
-  ;; 6. Core Linework
-  ;; -------------------------------------------------------------------------
+  ;; Linework
   ("R-LINE-CNTR"        1   "180,20,20"   "CENTER2"     13  T    "NONE"      1.0  0.0  0   nil  "Color 1 (Red): Center Line — Alignment centerlines, symmetry axes, positioning datums")
   ("R-LINE-CUT"         7   "0,0,0"       "CONTINUOUS"  50  T    "NONE"      1.0  0.0  0   nil  "Color 7 (White/Black): Cut Line — Primary section cuts, heavy substrate slicing profiles")
   ("R-LINE-DETL"        2   "165,110,0"   "CONTINUOUS"  18  T    "NONE"      1.0  0.0  0   nil  "Color 2 (Yellow): Detail Line — Secondary internal visible edges, panel grooves, rebates")
   ("R-LINE-HIDD"        9   "110,115,120" "HIDDEN2"     15  T    "NONE"      1.0  0.0  0   nil  "Color 9 (Light Gray): Hidden Line — Concealed framing, rear battens, internal shelf positions")
   ("R-LINE-VISB"        4   "0,110,150"   "CONTINUOUS"  25  T    "NONE"      1.0  0.0  0   nil  "Color 4 (Cyan): Visible Line — External carcass outlines, visible elevation edges")
 
-  ;; -------------------------------------------------------------------------
-  ;; 7. Materials & Finishes
-  ;; -------------------------------------------------------------------------
+  ;; Materials
   ("R-MAT-FABR-UPHL"    211 "160,50,90"   "CONTINUOUS"  18  T    "HOUND"     4.0  0.0  0   nil  "Color 211 (Pink): Fabric / Leather — Upholstery, acoustic wall paneling, foam padding")
   ("R-MAT-GLASS-MIRR"   140 "20,120,140"  "CONTINUOUS"  18  T    "AR-RROOF"  2.0  45.0 20  nil  "Color 140 (Light Cyan): Glass / Mirror — Clear/frosted glass, back-painted glass, mirrors (Transp: 20%)")
   ("R-MAT-INSL-CORE"    43  "105,115,30"  "CONTINUOUS"  15  T    "BATTS"     8.0  0.0  0   nil  "Color 43 (Olive): Insulation Core — Mineral wool, acoustic batts, structural backing cores")

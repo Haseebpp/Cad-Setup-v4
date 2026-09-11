@@ -131,7 +131,6 @@
 
   (CadSetup:UndoStart)
   (setvar "CMDECHO" 0)
-  (setvar "OSMODE" 0)
 
   (princ "\nGenerating production layer standards and styles...")
 

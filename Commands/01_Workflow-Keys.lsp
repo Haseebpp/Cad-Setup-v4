@@ -30,18 +30,46 @@
 
 
 ;;; --------------------------------------------------------------------------
-;;; 1. HELP LINE / CONSTRUCTION LINE (1 / HL)
+;;; 1. HELP LINE / CONSTRUCTION LINE WITH LIVE POINT NODES (1 / HL)
 ;;; --------------------------------------------------------------------------
-(defun c:HL ( / *error* oldLayer oldEcho lay )
+(vl-load-com)
+
+(defun c:HL ( / *error* oldLayer oldEcho lay pt1 pt2 history top
+                firstPtEnt lEnt pEnt startPt _mkPoint _mkLine )
   (setq lay (if *WF-LAYER-HL* *WF-LAYER-HL* "01-HELP-LINE"))
 
   (defun *error* (msg)
-    (if oldEcho (setvar "CMDECHO" oldEcho))
+    (if oldEcho  (setvar "CMDECHO" oldEcho))
     (if oldLayer (setvar "CLAYER" oldLayer))
     (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
       (princ (strcat "\n[HL] Error: " msg))
     )
     (princ)
+  )
+
+  ;; Helper: Create point entity on help layer (translates UCS -> WCS)
+  (defun _mkPoint (p)
+    (entmake
+      (list
+        '(0 . "POINT")
+        (cons 8 lay)
+        (cons 10 (trans p 1 0))
+      )
+    )
+    (entlast)
+  )
+
+  ;; Helper: Create line entity on help layer (translates UCS -> WCS)
+  (defun _mkLine (p1 p2)
+    (entmake
+      (list
+        '(0 . "LINE")
+        (cons 8 lay)
+        (cons 10 (trans p1 1 0))
+        (cons 11 (trans p2 1 0))
+      )
+    )
+    (entlast)
   )
 
   (setq oldEcho  (getvar "CMDECHO")
@@ -51,13 +79,67 @@
   ;; Safely set current layer using helper
   (CadSetup:SetCurrentLayerSafe lay)
 
-  (setvar "CMDECHO" 1)
-  (command "._line")
-  (while (> (getvar "CMDACTIVE") 0)
-    (command pause)
+  ;; Interactive loop
+  (setq pt1 (getpoint "\nSpecify first point: "))
+  (if pt1
+    (progn
+      ;; Live point on the very first click
+      (setq firstPtEnt (_mkPoint pt1)
+            history    (list (list nil nil firstPtEnt pt1)))
+
+      (while pt1
+        (if (> (length history) 1)
+          (initget "Undo Close")
+          (initget "Undo")
+        )
+        ;; Native rubber-band line from pt1 to cursor
+        (setq pt2 (getpoint pt1 (if (> (length history) 1)
+                                  "\nSpecify next point or [Close/Undo]: "
+                                  "\nSpecify next point or [Undo]: ")))
+        (cond
+          ;; Undo handling
+          ((= pt2 "Undo")
+           (setq top     (car history)
+                 history (cdr history))
+           (if (cadr top)  (entdel (cadr top)))   ; delete line segment
+           (if (caddr top) (entdel (caddr top)))  ; delete point node
+           (if history
+             (setq pt1 (last (car history)))
+             (progn
+               ;; Undid the initial click; prompt for start point again
+               (setq pt1 (getpoint "\nSpecify first point: "))
+               (if pt1
+                 (setq firstPtEnt (_mkPoint pt1)
+                       history    (list (list nil nil firstPtEnt pt1)))
+               )
+             )
+           )
+          )
+
+          ;; Close polygon handling
+          ((= pt2 "Close")
+           (setq startPt (last (last history)))
+           (_mkLine pt1 startPt)
+           (setq pt1 nil)
+          )
+
+          ;; Next point picked
+          ((listp pt2)
+           (setq lEnt (_mkLine pt1 pt2)
+                 pEnt (_mkPoint pt2))
+           (setq history (cons (list pt1 lEnt pEnt pt2) history))
+           (setq pt1 pt2)
+          )
+
+          ;; Enter / Space / nil to exit
+          (t
+           (setq pt1 nil)
+          )
+        )
+      )
+    )
   )
 
-  (setvar "CMDECHO" 0)
   (setvar "CLAYER" oldLayer)
   (setvar "CMDECHO" oldEcho)
 

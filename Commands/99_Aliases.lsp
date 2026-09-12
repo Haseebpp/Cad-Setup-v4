@@ -52,7 +52,7 @@
 (defun c:CP  () (command "_.COPY" "_P" "")(princ)); CP  -> Copy previously selected set
 (defun c:RR  () (command "_.ROTATE")     (princ)) ; RR  -> Rotate objects around a basepoint
 (defun c:SC  () (command "_.SCALE")      (princ)) ; SC  -> Scale objects uniformly
-(defun c:MI  () (command "_.MIRROR")     (princ)) ; MI  -> Mirror objects (retain source)
+;; (defun c:MI  () (initcommandversion) (command "_.MIRROR")     (princ)) ; MI  -> Mirror objects (retain source)
 (defun c:AL  () (command "_.ALIGN")      (princ)) ; AL  -> Align 2D/3D objects with source/target points
 (defun c:AR  () (initcommandversion) (command "_.ARRAY") (princ)) ; AR  -> Modern Associative Array Ribbon
 (defun c:VO  () (command "_.PASTEORIG")  (princ)) ; VO  -> Paste clipboard to original coordinates

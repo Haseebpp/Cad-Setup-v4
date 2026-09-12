@@ -172,7 +172,7 @@ material_selector_dialog : dialog {
 
     : button {
       key = "btn_draw";
-      label = "Make Current and Draw";
+      label = "Make Current and Draw (REC)";
       is_default = true;
       width = 22;
     }

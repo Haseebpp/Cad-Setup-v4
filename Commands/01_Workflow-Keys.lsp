@@ -1,11 +1,11 @@
 ;;; ==========================================================================
-;;; 01_Workflow-Keys.lsp - Numbered Rapid Workflow Keys (1, 2, 3, 4...)
+;;; 01_Workflow-Keys.lsp - Numbered Rapid Workflow Keys (1, 2, 3, 4, 5...)
 ;;; Layer: Commands (Priority 01)
 ;;; Author   : Haseeb
 ;;; ==========================================================================
 ;;;
 ;;; SUMMARY:
-;;;   Provides ergonomic single-digit drafting shortcuts (1, 2, 3, 4) with
+;;;   Provides ergonomic single-digit drafting shortcuts (1, 2, 3, 4, 5) with
 ;;;   automatic layer creation, target layer isolation, and automatic
 ;;;   restoration of the drafter's previous active layer upon completion or Esc.
 ;;;
@@ -16,6 +16,7 @@
 ;;;   [3] / GL : Grid Line & System Generator (Interactive DCL grid maker,
 ;;;              custom bay parsing, auto-bubbles, dimensions & single-line mode)
 ;;;   [4] / ML : Material Layer (Interactive DCL selector, layer setup & rectangle drawing)
+;;;   [5] / LL : Line Layer (Interactive DCL selector, layer setup & polyline drawing)
 ;;;
 ;;; ==========================================================================
 
@@ -28,6 +29,7 @@
 (setq *WF-LAYER-VP* "02-VIEW-PORT")     ;; Key 2: Viewport Boundary & Metadata
 (setq *WF-LAYER-GL* "03-GRID-LINE")     ;; Key 3: Structural / Layout Grid Line
 (setq *WF-LAYER-ML* nil)                ;; Key 4: Active Material Layer (set dynamically)
+(setq *WF-LAYER-LL* nil)                ;; Key 5: Active Line Layer (set dynamically)
 
 
 ;;; --------------------------------------------------------------------------
@@ -1715,7 +1717,421 @@
 (defun c:4 () (c:ML))
 
 
+;;; --------------------------------------------------------------------------
+;;; 5. LINE LAYER SELECTOR & POLYLINE DRAWING (5 / LL)
+;;; --------------------------------------------------------------------------
+
+;; CadSetup:GetDrawingLineLayers - Returns a sorted list of all active drawing layers matching "R-LINE-*"
+(defun CadSetup:GetDrawingLineLayers ( / layEntry layList )
+  (setq layList nil)
+  (setq layEntry (tblnext "LAYER" t))
+  (while layEntry
+    (if (wcmatch (strcase (cdr (assoc 2 layEntry))) "R-LINE-*")
+      (setq layList (cons (cdr (assoc 2 layEntry)) layList))
+    )
+    (setq layEntry (tblnext "LAYER" nil))
+  )
+  (if layList
+    (acad_strlsort layList)
+    nil
+  )
+)
+
+;; CadSetup:EnsureLineLayersLoaded - Creates standard line layers from Db_Layers.lsp if missing
+(defun CadSetup:EnsureLineLayersLoaded ( / allData count row lName lCol lPlotCol lType lWt lPlot lHatch lHScale lHRot lTrans lLocked lDesc )
+  (setq allData (if (boundp '*CadSetup-Layers-Data*) *CadSetup-Layers-Data* nil)
+        count 0)
+  (if allData
+    (foreach row allData
+      (setq lName (if (nth 0 row) (vl-princ-to-string (nth 0 row)) ""))
+      (if (wcmatch (strcase lName) "R-LINE-*")
+        (progn
+          (setq lCol     (if (numberp (nth 1 row)) (nth 1 row) 7)
+                lPlotCol (if (nth 2 row) (vl-princ-to-string (nth 2 row)) "")
+                lType    (if (nth 3 row) (vl-princ-to-string (nth 3 row)) "CONTINUOUS")
+                lWt      (if (numberp (nth 4 row)) (nth 4 row) 25)
+                lPlot    (nth 5 row)
+                lHatch   (if (nth 6 row) (vl-princ-to-string (nth 6 row)) "NONE")
+                lHScale  (if (numberp (nth 7 row)) (nth 7 row) 1.0)
+                lHRot    (if (numberp (nth 8 row)) (nth 8 row) 0.0)
+                lTrans   (if (numberp (nth 9 row)) (nth 9 row) 0)
+                lLocked  (nth 10 row)
+                lDesc    (if (nth 11 row) (vl-princ-to-string (nth 11 row)) ""))
+          (if (CadSetup:EnsureLayer lName lCol lPlotCol lType lWt lPlot 
+                                    lHatch lHScale lHRot lTrans lLocked lDesc)
+            (setq count (1+ count))
+          )
+        )
+      )
+    )
+  )
+  count
+)
+
+;; CadSetup:DrawPolyline - Sets current layer and launches native Polyline command
+(defun CadSetup:DrawPolyline (layName)
+  (CadSetup:SetCurrentLayerSafe layName)
+  (setq *WF-LAYER-LL* layName)
+  (princ (strcat "\n[LL] Current layer set to: " layName))
+  (setvar "CMDECHO" 1)
+  (command "_.PLINE")
+  (princ)
+)
+
+;; CadSetup:LineSelectorDialog - Modal DCL controller for selecting and inspecting line layer properties
+(defun CadSetup:LineSelectorDialog (lineLayers / *error* dclPath dclId act
+                                                 acadApp acadDoc layersColl
+                                                 selIdx selLayer layObj curCol
+                                                 curTrans pendingTransMap ltList lwLabels lwValues
+                                                 updateDetails newCol selLtypeIdx selLwIdx
+                                                 rawVal defRow defCol defLt defLw
+                                                 defPlot defTrans oldEcho item)
+  (defun *error* (msg)
+    (if (and dclId (>= dclId 0))
+      (vl-catch-all-apply 'unload_dialog (list dclId))
+    )
+    (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
+      (princ (strcat "\n[LL Dialog Error]: " msg))
+    )
+    (princ)
+  )
+
+  (setq acadApp         (vlax-get-acad-object)
+        acadDoc         (vla-get-activedocument acadApp)
+        layersColl      (vla-get-layers acadDoc)
+        pendingTransMap nil)
+
+  ;; Lineweight definition mappings
+  (setq lwLabels '("Default (-3)" "0.00 mm (0)" "0.05 mm (5)" "0.09 mm (9)" 
+                   "0.13 mm (13)" "0.15 mm (15)" "0.18 mm (18)" "0.20 mm (20)" 
+                   "0.25 mm (25)" "0.30 mm (30)" "0.35 mm (35)" "0.40 mm (40)" 
+                   "0.50 mm (50)" "0.60 mm (60)" "0.70 mm (70)" "0.80 mm (80)" 
+                   "0.90 mm (90)" "1.00 mm (100)" "1.20 mm (120)"))
+  (setq lwValues '(-3 0 5 9 13 15 18 20 25 30 35 40 50 60 70 80 90 100 120))
+  (setq ltList (CadSetup:GetLoadedLinetypes))
+
+  ;; Locate LINE-SELECTOR.dcl
+  (setq dclPath nil)
+  (cond
+    ((and (boundp 'CadSetup:GetDir) CadSetup:GetDir 
+          (setq dclPath (strcat (CadSetup:GetDir) "\\UI\\LINE-SELECTOR.dcl")) 
+          (findfile dclPath))
+     dclPath)
+    ((setq dclPath (findfile "LINE-SELECTOR.dcl"))
+     dclPath)
+    ((setq dclPath (findfile "UI\\LINE-SELECTOR.dcl"))
+     dclPath)
+    ((setq dclPath (findfile "d:\\Cad-Setup\\Cad-Setup-v4\\UI\\LINE-SELECTOR.dcl"))
+     dclPath)
+  )
+
+  (if (or (null dclPath) (not (findfile dclPath)))
+    (progn
+      (princ "\n[LL Error]: LINE-SELECTOR.dcl not found in UI/ directory.")
+      (exit)
+    )
+  )
+
+  (setq dclId (load_dialog dclPath))
+  (if (or (null dclId) (< dclId 0))
+    (progn
+      (princ (strcat "\n[LL Error]: Failed to load dialog file " dclPath))
+      (exit)
+    )
+  )
+
+  (if (not (new_dialog "line_selector_dialog" dclId))
+    (progn
+      (unload_dialog dclId)
+      (princ "\n[LL Error]: Dialog definition 'line_selector_dialog' not found in DCL.")
+      (exit)
+    )
+  )
+
+  ;; Populate line layers listbox
+  (start_list "lst_lines")
+  (mapcar 'add_list lineLayers)
+  (end_list)
+
+  ;; Populate Linetypes dropdown
+  (start_list "pop_line_ltype")
+  (mapcar 'add_list ltList)
+  (end_list)
+
+  ;; Populate Lineweights dropdown
+  (start_list "pop_line_lweight")
+  (mapcar 'add_list lwLabels)
+  (end_list)
+
+  ;; Selection state
+  (setq selIdx 0
+        selLayer (nth 0 lineLayers))
+  (set_tile "lst_lines" "0")
+
+  ;; Details Updater Subroutine
+  (defun updateDetails (layName / obj cVal ltp lwt plt dbRow desc swW swH posLtp posLwt descLines pendT)
+    (setq obj (vl-catch-all-apply 'vla-item (list layersColl layName)))
+    (if (and (not (vl-catch-all-error-p obj)) (= (type obj) 'VLA-OBJECT))
+      (progn
+        (setq layObj obj)
+        (setq cVal (abs (vla-get-color layObj)))
+        (setq curCol cVal)
+        (setq ltp (vla-get-linetype layObj))
+        (setq lwt (vla-get-lineweight layObj))
+        (setq plt (= (vla-get-plottable layObj) :vlax-true))
+
+        ;; Render Color Swatch
+        (setq swW (dimx_tile "img_color_swatch")
+              swH (dimy_tile "img_color_swatch"))
+        (start_image "img_color_swatch")
+        (fill_image 0 0 swW swH cVal)
+        (end_image)
+
+        ;; Update textual tiles
+        (set_tile "txt_line_name" (strcat "Line Layer: " layName))
+        (set_tile "txt_line_color" (strcat "Color: " (itoa cVal) " (ACI)"))
+
+        ;; Match and set Linetype popup
+        (setq posLtp (vl-position (strcase ltp) (mapcar 'strcase ltList)))
+        (if posLtp (set_tile "pop_line_ltype" (itoa posLtp)))
+
+        ;; Match and set Lineweight popup
+        (setq posLwt (vl-position lwt lwValues))
+        (if (null posLwt) (setq posLwt 0))
+        (set_tile "pop_line_lweight" (itoa posLwt))
+
+        ;; Set Plottable toggle
+        (set_tile "tog_line_plot" (if plt "1" "0"))
+
+        ;; Read transparency from pending map or default DB
+        (setq pendT (assoc layName pendingTransMap))
+        (if pendT
+          (setq curTrans (cdr pendT))
+          (progn
+            (setq dbRow (assoc (strcase layName) *CadSetup-Layers-Data*))
+            (setq curTrans (if (and dbRow (numberp (nth 9 dbRow))) (nth 9 dbRow) 0))
+          )
+        )
+        (set_tile "eb_line_trans" (itoa curTrans))
+
+        ;; Fetch Description from Db_Layers and wrap across 3 lines
+        (setq dbRow (assoc (strcase layName) *CadSetup-Layers-Data*))
+        (setq desc (if (and dbRow (nth 11 dbRow)) (vl-princ-to-string (nth 11 dbRow)) "Standard Production Line Layer"))
+        (setq descLines (CadSetup:WrapText3Lines desc 50))
+        (set_tile "txt_line_desc1" (nth 0 descLines))
+        (set_tile "txt_line_desc2" (nth 1 descLines))
+        (set_tile "txt_line_desc3" (nth 2 descLines))
+      )
+    )
+  )
+
+  ;; Initialize first item
+  (updateDetails selLayer)
+
+  ;; Dialog Callbacks / Actions
+  (action_tile "lst_lines"
+    "(setq selIdx (atoi $value)
+           selLayer (nth selIdx lineLayers))
+     (updateDetails selLayer)
+     (if (= $reason 4) (done_dialog 1))"
+  )
+
+  (action_tile "btn_edit_color"
+    "(setq newCol (acad_colordlg curCol))
+     (if (and newCol layObj)
+       (progn
+         (vla-put-color layObj newCol)
+         (setq curCol newCol)
+         (set_tile \"txt_line_color\" (strcat \"Color: \" (itoa newCol) \" (ACI)\"))
+         (setq swW (dimx_tile \"img_color_swatch\")
+               swH (dimy_tile \"img_color_swatch\"))
+         (start_image \"img_color_swatch\")
+         (fill_image 0 0 swW swH newCol)
+         (end_image)
+       )
+     )"
+  )
+
+  (action_tile "pop_line_ltype"
+    "(setq selLtypeIdx (atoi $value))
+     (if (and layObj selLtypeIdx (< selLtypeIdx (length ltList)))
+       (vl-catch-all-apply 'vla-put-linetype (list layObj (nth selLtypeIdx ltList)))
+     )"
+  )
+
+  (action_tile "pop_line_lweight"
+    "(setq selLwIdx (atoi $value))
+     (if (and layObj selLwIdx (< selLwIdx (length lwValues)))
+       (vl-catch-all-apply 'vla-put-lineweight (list layObj (nth selLwIdx lwValues)))
+     )"
+  )
+
+  (action_tile "tog_line_plot"
+    "(if layObj
+       (vla-put-plottable layObj (if (= $value \"1\") :vlax-true :vlax-false))
+     )"
+  )
+
+  (action_tile "eb_line_trans"
+    "(setq rawVal (atoi $value))
+     (if (and (>= rawVal 0) (<= rawVal 90))
+       (progn
+         (setq curTrans rawVal)
+         (setq pendingTransMap (cons (cons selLayer curTrans) 
+                                     (vl-remove-if (function (lambda (x) (= (car x) selLayer))) pendingTransMap)))
+         (CadSetup:UpdateLayerDataInMemory selLayer nil nil nil curTrans)
+       )
+       (set_tile \"eb_line_trans\" (itoa curTrans))
+     )"
+  )
+
+  (action_tile "btn_reset_defaults"
+    "(if (boundp '*CadSetup-Master-Layers-Backup*)
+       (setq defRow (assoc (strcase selLayer) *CadSetup-Master-Layers-Backup*))
+       (setq defRow nil)
+     )
+     (if defRow
+       (progn
+         (setq defCol   (if (numberp (nth 1 defRow)) (nth 1 defRow) 7)
+               defLt    (if (nth 3 defRow) (vl-princ-to-string (nth 3 defRow)) \"CONTINUOUS\")
+               defLw    (if (numberp (nth 4 defRow)) (nth 4 defRow) 25)
+               defPlot  (nth 5 defRow)
+               defTrans (if (numberp (nth 9 defRow)) (nth 9 defRow) 0))
+
+         (if layObj
+           (progn
+             (vla-put-color layObj defCol)
+             (vl-catch-all-apply 'vla-put-linetype (list layObj defLt))
+             (vl-catch-all-apply 'vla-put-lineweight (list layObj defLw))
+             (vla-put-plottable layObj (if defPlot :vlax-true :vlax-false))
+           )
+         )
+         (setq curTrans defTrans)
+         (setq pendingTransMap (cons (cons selLayer curTrans) 
+                                     (vl-remove-if (function (lambda (x) (= (car x) selLayer))) pendingTransMap)))
+         (CadSetup:UpdateLayerDataInMemory selLayer nil nil nil defTrans)
+         (updateDetails selLayer)
+         (princ (strcat \"\\n[LL] Reset \" selLayer \" to standard database defaults.\"))
+       )
+       (princ (strcat \"\\n[LL] No default definition found for \" selLayer))
+     )"
+  )
+
+  (action_tile "btn_draw" "(done_dialog 1)")
+  (action_tile "btn_current" "(done_dialog 2)")
+  (action_tile "cancel" "(done_dialog 0)")
+
+  (setq act (start_dialog))
+  (unload_dialog dclId)
+
+  ;; Apply any modified layer transparencies natively outside DCL
+  (if pendingTransMap
+    (progn
+      (setq oldEcho (getvar "CMDECHO"))
+      (setvar "CMDECHO" 0)
+      (foreach item pendingTransMap
+        (vl-catch-all-apply
+          (function (lambda ()
+            (command "._-LAYER" "_TR" (itoa (cdr item)) (car item) "")
+          ))
+        )
+      )
+      (setvar "CMDECHO" oldEcho)
+    )
+  )
+
+  ;; Return action result: (list actionType layerName)
+  (cond
+    ((= act 1) (list :draw selLayer))
+    ((= act 2) (list :current selLayer))
+    (t nil)
+  )
+)
+
+;; c:LL - Line Layer / Polyline Workflow Entry Point
+(defun c:LL ( / lineLayers ans promptStr kwStr kwMap suffix kw opt res chosenLayer )
+  ;; 1. Check for existing R-LINE-* layers in active drawing
+  (setq lineLayers (CadSetup:GetDrawingLineLayers))
+
+  ;; 2. If none exist, offer to load standard linework from Db_Layers
+  (if (null lineLayers)
+    (progn
+      (initget "Yes No")
+      (setq ans (getkword "\n[LL] No 'R-LINE-*' linework layers found. Load standard linework from database? [Yes/No] <Yes>: "))
+      (if (or (null ans) (= ans "Yes") (= ans "Y"))
+        (progn
+          (princ "\n[LL] Loading standard line layers from database...")
+          (CadSetup:EnsureLineLayersLoaded)
+          (setq lineLayers (CadSetup:GetDrawingLineLayers))
+        )
+      )
+    )
+  )
+
+  (if (null lineLayers)
+    (progn
+      (princ "\n[LL] Cancelled. No line layers available.")
+      (princ)
+    )
+    (progn
+      ;; 3. Build Command-Line Keywords and Prompt
+      ;; Format: [Dialog/SUFFIX1/SUFFIX2/...] <Dialog>:
+      (setq kwMap '(("DIALOG" . "DIALOG") ("D" . "DIALOG")))
+      (setq promptStr "\nSelect Line [Dialog")
+      (setq kwStr "Dialog D")
+
+      (foreach lay lineLayers
+        ;; Extract suffix after "R-LINE-"
+        (setq suffix (if (> (strlen lay) 7) (substr lay 8) lay))
+        (setq kw (strcase (vl-string-translate " " "_" suffix)))
+        ;; Store in keyword-to-layer lookup map
+        (setq kwMap (cons (cons kw lay) kwMap))
+        (setq promptStr (strcat promptStr "/" suffix))
+        (setq kwStr (strcat kwStr " " kw))
+      )
+      (setq promptStr (strcat promptStr "] <Dialog>: "))
+
+      ;; 4. Prompt User
+      (initget kwStr)
+      (setq opt (getkword promptStr))
+
+      ;; Default is Dialog if Enter pressed
+      (if (or (null opt) (= (strcase opt) "DIALOG") (= (strcase opt) "D"))
+        (progn
+          (setq res (CadSetup:LineSelectorDialog lineLayers))
+          (if res
+            (cond
+              ((= (car res) :draw)
+               (CadSetup:DrawPolyline (cadr res))
+              )
+              ((= (car res) :current)
+               (CadSetup:SetCurrentLayerSafe (cadr res))
+               (setq *WF-LAYER-LL* (cadr res))
+               (princ (strcat "\n[LL] Current layer set to: " (cadr res)))
+              )
+            )
+            (princ "\n[LL] Cancelled.")
+          )
+        )
+        ;; Direct Keyword Selected from Command Line
+        (progn
+          (setq chosenLayer (cdr (assoc (strcase (vl-string-translate " " "_" opt)) kwMap)))
+          (if chosenLayer
+            (CadSetup:DrawPolyline chosenLayer)
+            (princ (strcat "\n[LL] Unrecognized line layer: " opt))
+          )
+        )
+      )
+    )
+  )
+  (princ)
+)
+
+(defun c:5 () (c:LL))
+
+
 (if *CadSetup-Debug*
-  (princ "\n[01_Workflow-Keys.lsp] Workflow keys (1=HL, 2=VP, 3=GL, 4=ML) loaded.")
+  (princ "\n[01_Workflow-Keys.lsp] Workflow keys (1=HL, 2=VP, 3=GL, 4=ML, 5=LL) loaded.")
 )
 (princ)
+

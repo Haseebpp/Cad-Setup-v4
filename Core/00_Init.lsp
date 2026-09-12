@@ -57,6 +57,13 @@
 ;; ENVIRONMENT & CAPABILITY CHECKS
 ;; ===========================================================================
 
+;; AutoLISP compatibility utility for fboundp (function bound predicate)
+(defun fboundp (sym)
+  (and (symbolp sym)
+       (boundp sym)
+       (member (type (vl-symbol-value sym)) '(SUBR USUBR EXRXSUBR)))
+)
+
 (defun CadSetup:CheckEnvironment ( / acadApp doc )
   (setq acadApp (vlax-get-acad-object))
   (if (null acadApp)

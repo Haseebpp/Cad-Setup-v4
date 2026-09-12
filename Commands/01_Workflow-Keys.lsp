@@ -13,7 +13,8 @@
 ;;;   [1] / HL : Help Line (Draws on "01-HELP-LINE", restores previous layer)
 ;;;   [2] / VP : Viewport Boundary (Draws frame on "02-VIEW-PORT", generates
 ;;;              dynamic ISO A3 scale, title & metadata MText, center snap node)
-;;;   [3] / GL : Grid Line (Draws on "03-GRID-LINE", restores previous layer)
+;;;   [3] / GL : Grid Line & System Generator (Interactive DCL grid maker,
+;;;              custom bay parsing, auto-bubbles, dimensions & single-line mode)
 ;;;   [4] / ML : Material Line (Draws on "MATERIAL-LINE", restores previous layer)
 ;;;
 ;;; ==========================================================================
@@ -307,16 +308,210 @@
 
 
 ;;; --------------------------------------------------------------------------
-;;; 3. GRID LINE (3 / GL)
+;;; 3. STRUCTURAL & ARCHITECTURAL GRID SYSTEM GENERATOR (3 / GL)
 ;;; --------------------------------------------------------------------------
-(defun c:GL ( / *error* oldLayer oldEcho lay )
-  (setq lay (if *WF-LAYER-GL* *WF-LAYER-GL* "03-GRID-LINE"))
 
+;; AutoLISP compatibility utility for fboundp (function bound predicate)
+(if (not (boundp 'fboundp))
+  (defun fboundp (sym)
+    (and (symbolp sym)
+         (boundp sym)
+         (member (type (vl-symbol-value sym)) '(SUBR USUBR EXRXSUBR)))
+  )
+)
+
+;; Global single-line and grid session attributes
+(if (null *GL-SINGLE-TAG*)
+  (setq *GL-SINGLE-TAG* "1")
+)
+(if (null *GL-BUBBLE-RAD*)
+  (setq *GL-BUBBLE-RAD* 450.0)
+)
+(if (null *GL-GRID-EXT*)
+  (setq *GL-GRID-EXT* 1000.0)
+)
+(if (null *GL-TEXT-HT*)
+  (setq *GL-TEXT-HT* 300.0)
+)
+(if (null *GL-BUBBLE-POS*)
+  (setq *GL-BUBBLE-POS* "End")
+)
+
+;; Helper: Parse spacing string into list of real bay distances
+;; Handles: "4*6000", "6000, 5000, 7500", "3*6000, 4500, 2*3000"
+(defun CadSetup:ParseGridSpacings (str / len i ch curToken tokens starPos count val res)
+  (if (or (null str) (/= (type str) 'STR))
+    nil
+    (progn
+      ;; Strip spaces around '*' (e.g. "4 * 6000" -> "4*6000")
+      (while (vl-string-search " *" str)
+        (setq str (vl-string-subst "*" " *" str))
+      )
+      (while (vl-string-search "* " str)
+        (setq str (vl-string-subst "*" "* " str))
+      )
+      (setq len (strlen str)
+            i 1
+            curToken ""
+            tokens nil)
+      (while (<= i len)
+        (setq ch (substr str i 1))
+        (if (vl-position ch '(" " "," ";" "\t"))
+          (progn
+            (if (/= curToken "")
+              (setq tokens (cons curToken tokens)
+                    curToken ""))
+          )
+          (setq curToken (strcat curToken ch))
+        )
+        (setq i (1+ i))
+      )
+      (if (/= curToken "")
+        (setq tokens (cons curToken tokens))
+      )
+      (setq tokens (reverse tokens))
+
+      (setq res nil)
+      (foreach tok tokens
+        (setq starPos (vl-string-search "*" tok))
+        (if starPos
+          (progn
+            (setq count (atoi (substr tok 1 starPos))
+                  val   (distof (substr tok (+ starPos 2))))
+            (if (and (> count 0) val (> val 0.0))
+              (repeat count
+                (setq res (cons (float val) res))
+              )
+            )
+          )
+          (progn
+            (setq val (distof tok))
+            (if (and val (> val 0.0))
+              (setq res (cons (float val) res))
+            )
+          )
+        )
+      )
+      (reverse res)
+    )
+  )
+)
+
+;; Helper: Auto-increment alpha strings ("A"->"B", "Z"->"AA", "AA"->"AB")
+(defun CadSetup:IncrementAlpha (str / len lastChar rest)
+  (setq len (strlen str))
+  (if (<= len 0)
+    "A"
+    (progn
+      (setq lastChar (ascii (strcase (substr str len 1)))
+            rest     (substr str 1 (1- len)))
+      (cond
+        ((= lastChar 90) ;; 'Z'
+         (if (= rest "")
+           "AA"
+           (strcat (CadSetup:IncrementAlpha rest) "A")
+         ))
+        ((and (>= lastChar 65) (< lastChar 90))
+         (strcat rest (chr (1+ lastChar))))
+        (t (strcat str "1"))
+      )
+    )
+  )
+)
+
+;; Helper: Smart tag incrementer for numbers, letters, or compound tags ("1"->"2", "A"->"B", "GL-01"->"GL-02")
+(defun CadSetup:IncrementGridTag (tag / len i prefix suffix nextNum nextNumStr)
+  (if (or (null tag) (= tag ""))
+    "1"
+    (progn
+      (setq len (strlen tag))
+      (if (numberp (read tag))
+        (itoa (1+ (atoi tag)))
+        (progn
+          (setq i len)
+          (while (and (> i 0) (<= 48 (ascii (substr tag i 1)) 57))
+            (setq i (1- i))
+          )
+          (if (< i len)
+            (progn
+              (setq prefix (substr tag 1 i)
+                    suffix (substr tag (1+ i))
+                    nextNum (1+ (atoi suffix))
+                    nextNumStr (itoa nextNum))
+              ;; Preserve zero-padding if any
+              (while (< (strlen nextNumStr) (strlen suffix))
+                (setq nextNumStr (strcat "0" nextNumStr))
+              )
+              (strcat prefix nextNumStr)
+            )
+            (CadSetup:IncrementAlpha tag)
+          )
+        )
+      )
+    )
+  )
+)
+
+;; Helper: Interactive Sub-Menu Loop for Single Grid Line Attributes
+(defun CadSetup:SingleGridSettingsPrompt ( / optVal inputVal loop )
+  (princ (strcat "\n[GL Settings] Current: Placement=" *GL-BUBBLE-POS*
+                 ", Radius=" (rtos *GL-BUBBLE-RAD* 2 1)
+                 ", Extension=" (rtos *GL-GRID-EXT* 2 1)
+                 ", TextHeight=" (rtos *GL-TEXT-HT* 2 1)))
+  (setq loop T)
+  (while loop
+    (initget "Placement Radius Extension Text eXit P R E T X")
+    (setq optVal (getkword "\nGrid Settings [Placement/Radius/Extension/Text/eXit] <eXit>: "))
+    (cond
+      ((or (= optVal "Placement") (= optVal "P"))
+       (initget "End Start Both None E S B N")
+       (setq inputVal (getkword (strcat "\nBubble Placement [End/Start/Both/None] <" *GL-BUBBLE-POS* ">: ")))
+       (cond
+         ((or (= inputVal "End") (= inputVal "E"))   (setq *GL-BUBBLE-POS* "End"))
+         ((or (= inputVal "Start") (= inputVal "S")) (setq *GL-BUBBLE-POS* "Start"))
+         ((or (= inputVal "Both") (= inputVal "B"))  (setq *GL-BUBBLE-POS* "Both"))
+         ((or (= inputVal "None") (= inputVal "N"))  (setq *GL-BUBBLE-POS* "None"))
+       )
+       (princ (strcat "\n[GL Settings] Placement -> " *GL-BUBBLE-POS*))
+      )
+      ((or (= optVal "Radius") (= optVal "R"))
+       (setq inputVal (getdist (strcat "\nBubble Radius <" (rtos *GL-BUBBLE-RAD* 2 1) ">: ")))
+       (if (and inputVal (> inputVal 0.0))
+         (setq *GL-BUBBLE-RAD* inputVal)
+       )
+       (princ (strcat "\n[GL Settings] Radius -> " (rtos *GL-BUBBLE-RAD* 2 1)))
+      )
+      ((or (= optVal "Extension") (= optVal "E"))
+       (setq inputVal (getdist (strcat "\nLine Extension (Overshoot) <" (rtos *GL-GRID-EXT* 2 1) ">: ")))
+       (if (and inputVal (> inputVal 0.0))
+         (setq *GL-GRID-EXT* inputVal)
+       )
+       (princ (strcat "\n[GL Settings] Extension -> " (rtos *GL-GRID-EXT* 2 1)))
+      )
+      ((or (= optVal "Text") (= optVal "T"))
+       (setq inputVal (getdist (strcat "\nText Height <" (rtos *GL-TEXT-HT* 2 1) ">: ")))
+       (if (and inputVal (> inputVal 0.0))
+         (setq *GL-TEXT-HT* inputVal)
+       )
+       (princ (strcat "\n[GL Settings] Text Height -> " (rtos *GL-TEXT-HT* 2 1)))
+      )
+      (t
+       (setq loop nil)
+      )
+    )
+  )
+  (princ)
+)
+
+;; Helper: Draw Single Grid Line with Auto-Increment Bubble & Tags
+(defun CadSetup:DrawSingleGridLine ( / *error* oldLayer oldEcho pt1 pt2 ang rad ext th pos
+                                       lbl centerPt lineStart lineEnd mainLoop )
   (defun *error* (msg)
     (if oldEcho (setvar "CMDECHO" oldEcho))
     (if oldLayer (setvar "CLAYER" oldLayer))
+    (CadSetup:UndoEnd)
     (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
-      (princ (strcat "\n[GL] Error: " msg))
+      (princ (strcat "\n[GL-Single] Error: " msg))
     )
     (princ)
   )
@@ -325,23 +520,632 @@
         oldLayer (getvar "CLAYER"))
   (setvar "CMDECHO" 0)
 
-  (CadSetup:SetCurrentLayerSafe lay)
-
-  (setvar "CMDECHO" 1)
-  (command "._line")
-  (while (> (getvar "CMDACTIVE") 0)
-    (command pause)
+  ;; Ensure production layers
+  (if (and (boundp 'CadSetup:EnsureLayer) CadSetup:EnsureLayer)
+    (progn
+      (CadSetup:EnsureLayer "03-GRID-LINE" 8 "100,100,100" "CONTINUOUS" 18 T "NONE" 1.0 0.0 0 nil "Structural Grid Lines")
+      (CadSetup:EnsureLayer "R-ANNO-SYMB"  2 "170,115,0"   "CONTINUOUS" 25 T "NONE" 1.0 0.0 0 nil "Grid Bubbles & Markers")
+    )
   )
 
-  (setvar "CMDECHO" 0)
+  (princ "\n--- Single Grid Line Mode (Press Enter/Esc at prompt to finish) ---")
+  (setq mainLoop T)
+  (while mainLoop
+    (initget 128 "Settings S")
+    (setq pt1 (getpoint "\n[GL-Single] Specify Start Point or [Settings]: "))
+    (cond
+      ((or (eq pt1 "Settings") (eq pt1 "S"))
+       (CadSetup:SingleGridSettingsPrompt)
+      )
+      ((listp pt1)
+       (if (setq pt2 (getpoint pt1 "\n[GL-Single] Specify End Point: "))
+         (progn
+           (setq lbl (getstring t (strcat "\n[GL-Single] Enter Grid Bubble Label <" *GL-SINGLE-TAG* ">: ")))
+           (if (or (null lbl) (= lbl ""))
+             (setq lbl *GL-SINGLE-TAG*)
+           )
+
+           (CadSetup:UndoStart)
+
+           (setq rad *GL-BUBBLE-RAD*
+                 ext *GL-GRID-EXT*
+                 th  *GL-TEXT-HT*
+                 pos *GL-BUBBLE-POS*
+                 ang (angle pt1 pt2))
+
+           ;; Calculate line endpoints based on overshoot extension
+           (setq lineStart (if (or (= pos "Start") (= pos "Both") (= pos "None"))
+                             (polar pt1 (+ ang pi) ext)
+                             pt1))
+           (setq lineEnd   (if (or (= pos "End") (= pos "Both") (= pos "None"))
+                             (polar pt2 ang ext)
+                             pt2))
+
+           ;; 1. Draw Grid Line on 03-GRID-LINE
+           (entmake
+             (list
+               '(0 . "LINE")
+               '(100 . "AcDbEntity")
+               (cons 8 "03-GRID-LINE")
+               '(100 . "AcDbLine")
+               (cons 10 (trans lineStart 1 0))
+               (cons 11 (trans lineEnd 1 0))
+             )
+           )
+
+           ;; 2. Draw Start Bubble (if Start or Both)
+           (if (or (= pos "Start") (= pos "Both"))
+             (progn
+               (setq centerPt (polar pt1 (+ ang pi) (+ ext rad)))
+               (entmake
+                 (list
+                   '(0 . "CIRCLE")
+                   '(100 . "AcDbEntity")
+                   (cons 8 "R-ANNO-SYMB")
+                   '(100 . "AcDbCircle")
+                   (cons 10 (trans centerPt 1 0))
+                   (cons 40 rad)
+                 )
+               )
+               (entmake
+                 (list
+                   '(0 . "MTEXT")
+                   '(100 . "AcDbEntity")
+                   (cons 8 "R-ANNO-SYMB")
+                   '(100 . "AcDbMText")
+                   (cons 10 (trans centerPt 1 0))
+                   (cons 40 th)
+                   '(71 . 5)  ;; Middle Center
+                   (cons 1 (strcat "{\\fArial|b1;" lbl "}"))
+                 )
+               )
+             )
+           )
+
+           ;; 3. Draw End Bubble (if End or Both)
+           (if (or (= pos "End") (= pos "Both"))
+             (progn
+               (setq centerPt (polar pt2 ang (+ ext rad)))
+               (entmake
+                 (list
+                   '(0 . "CIRCLE")
+                   '(100 . "AcDbEntity")
+                   (cons 8 "R-ANNO-SYMB")
+                   '(100 . "AcDbCircle")
+                   (cons 10 (trans centerPt 1 0))
+                   (cons 40 rad)
+                 )
+               )
+               (entmake
+                 (list
+                   '(0 . "MTEXT")
+                   '(100 . "AcDbEntity")
+                   (cons 8 "R-ANNO-SYMB")
+                   '(100 . "AcDbMText")
+                   (cons 10 (trans centerPt 1 0))
+                   (cons 40 th)
+                   '(71 . 5)  ;; Middle Center
+                   (cons 1 (strcat "{\\fArial|b1;" lbl "}"))
+                 )
+               )
+             )
+           )
+
+           (CadSetup:UndoEnd)
+
+           ;; Increment tag for next line
+           (setq *GL-SINGLE-TAG* (CadSetup:IncrementGridTag lbl))
+           (princ (strcat "\n[GL-Single] Placed line '" lbl "'. Next default tag: '" *GL-SINGLE-TAG* "'."))
+         )
+         (setq mainLoop nil)
+       )
+      )
+      (t
+       (setq mainLoop nil)
+      )
+    )
+  )
+
   (setvar "CLAYER" oldLayer)
   (setvar "CMDECHO" oldEcho)
+  (princ (strcat "\n[GL-Single] Completed. Restored layer: " oldLayer))
+  (princ)
+)
 
-  (princ (strcat "\n[GL] Completed. Restored layer: " oldLayer))
+;; Helper: Draw Full Grid System with Bubbles and Dimensions
+(defun CadSetup:DrawGridSystem ( xSpacings xStartTag ySpacings yStartTag
+                                 bubblePos bubbleRad gridExt textHt
+                                 addBayDims addTotalDims dimOffset /
+                                 *error* oldLayer oldEcho insPt rotAngle cosA sinA
+                                 cumX curX cumY curY xTot yTot
+                                 _toWorld i curTag xVal yVal
+                                 pStart pEnd pCircle
+                                 hasTopBubble hasBottomBubble hasLeftBubble hasRightBubble
+                                 yBayDim yTotDim xBayDim xTotDim p1 p2 pDim )
+
+  (defun *error* (msg)
+    (if oldEcho (setvar "CMDECHO" oldEcho))
+    (if oldLayer (setvar "CLAYER" oldLayer))
+    (CadSetup:UndoEnd)
+    (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
+      (princ (strcat "\n[GL-Grid Error]: " msg))
+    )
+    (princ)
+  )
+
+  (setq oldEcho  (getvar "CMDECHO")
+        oldLayer (getvar "CLAYER"))
+  (setvar "CMDECHO" 0)
+
+  ;; 1. Prompt for Insertion Point and Rotation
+  (setq insPt (getpoint "\n[GL] Specify Grid System Origin Point (Intersection 1-A): "))
+  (if (null insPt)
+    (progn
+      (princ "\n[GL] Grid insertion cancelled.")
+      (setvar "CLAYER" oldLayer)
+      (setvar "CMDECHO" oldEcho)
+      (exit)
+    )
+  )
+
+  (setq rotAngle (getangle insPt "\n[GL] Specify Grid Rotation Angle <0.0>: "))
+  (if (null rotAngle) (setq rotAngle 0.0))
+
+  ;; Ensure Layers
+  (if (and (boundp 'CadSetup:EnsureLayer) CadSetup:EnsureLayer)
+    (progn
+      (CadSetup:EnsureLayer "03-GRID-LINE" 8  "100,100,100" "CONTINUOUS" 18 T "NONE" 1.0 0.0 0 nil "Structural Grid Lines")
+      (CadSetup:EnsureLayer "R-ANNO-SYMB"  2  "170,115,0"   "CONTINUOUS" 25 T "NONE" 1.0 0.0 0 nil "Grid Bubbles & Markers")
+      (CadSetup:EnsureLayer "R-ANNO-DIMS"  20 "180,75,0"    "CONTINUOUS" 18 T "NONE" 1.0 0.0 0 nil "Grid Dimensions")
+    )
+  )
+
+  (CadSetup:UndoStart)
+
+  ;; 2. Coordinate Transformation Math
+  (setq cosA (cos rotAngle)
+        sinA (sin rotAngle))
+
+  (defun _toWorld (lx ly)
+    (list
+      (+ (car insPt)  (- (* lx cosA) (* ly sinA)))
+      (+ (cadr insPt) (+ (* lx sinA) (* ly cosA)))
+      (if (caddr insPt) (caddr insPt) 0.0)
+    )
+  )
+
+  ;; 3. Compute Cumulative Coordinate Lists
+  ;; X coordinates (vertical lines at each x)
+  (setq cumX (list 0.0)
+        curX 0.0)
+  (foreach sp xSpacings
+    (setq curX (+ curX sp)
+          cumX (cons curX cumX))
+  )
+  (setq cumX (reverse cumX))
+  (setq xTot (last cumX))
+
+  ;; Y coordinates (horizontal lines at each y)
+  (setq cumY (list 0.0)
+        curY 0.0)
+  (foreach sp ySpacings
+    (setq curY (+ curY sp)
+          cumY (cons curY cumY))
+  )
+  (setq cumY (reverse cumY))
+  (setq yTot (last cumY))
+
+  ;; Determine bubble flags:
+  ;; 0 = Both Ends, 1 = Top & Left Only, 2 = Bottom & Right Only, 3 = None
+  (setq hasTopBubble    (or (= bubblePos 0) (= bubblePos 1))
+        hasBottomBubble (or (= bubblePos 0) (= bubblePos 2))
+        hasLeftBubble   (or (= bubblePos 0) (= bubblePos 1))
+        hasRightBubble  (or (= bubblePos 0) (= bubblePos 2)))
+
+  ;; 4. Draw Vertical Grid Lines (X-Axis)
+  (setq curTag xStartTag
+        i 0)
+  (while (< i (length cumX))
+    (setq xVal (nth i cumX))
+
+    ;; Grid Line (03-GRID-LINE)
+    (setq pStart (_toWorld xVal (- 0.0 gridExt))
+          pEnd   (_toWorld xVal (+ yTot gridExt)))
+    (entmake
+      (list
+        '(0 . "LINE")
+        '(100 . "AcDbEntity")
+        (cons 8 "03-GRID-LINE")
+        '(100 . "AcDbLine")
+        (cons 10 (trans pStart 1 0))
+        (cons 11 (trans pEnd 1 0))
+      )
+    )
+
+    ;; Top Bubble
+    (if hasTopBubble
+      (progn
+        (setq pCircle (_toWorld xVal (+ yTot gridExt bubbleRad)))
+        (entmake
+          (list
+            '(0 . "CIRCLE")
+            '(100 . "AcDbEntity")
+            (cons 8 "R-ANNO-SYMB")
+            '(100 . "AcDbCircle")
+            (cons 10 (trans pCircle 1 0))
+            (cons 40 bubbleRad)
+          )
+        )
+        (entmake
+          (list
+            '(0 . "MTEXT")
+            '(100 . "AcDbEntity")
+            (cons 8 "R-ANNO-SYMB")
+            '(100 . "AcDbMText")
+            (cons 10 (trans pCircle 1 0))
+            (cons 40 textHt)
+            '(71 . 5) ;; Middle Center
+            (cons 1 (strcat "{\\fArial|b1;" curTag "}"))
+          )
+        )
+      )
+    )
+
+    ;; Bottom Bubble
+    (if hasBottomBubble
+      (progn
+        (setq pCircle (_toWorld xVal (- 0.0 gridExt bubbleRad)))
+        (entmake
+          (list
+            '(0 . "CIRCLE")
+            '(100 . "AcDbEntity")
+            (cons 8 "R-ANNO-SYMB")
+            '(100 . "AcDbCircle")
+            (cons 10 (trans pCircle 1 0))
+            (cons 40 bubbleRad)
+          )
+        )
+        (entmake
+          (list
+            '(0 . "MTEXT")
+            '(100 . "AcDbEntity")
+            (cons 8 "R-ANNO-SYMB")
+            '(100 . "AcDbMText")
+            (cons 10 (trans pCircle 1 0))
+            (cons 40 textHt)
+            '(71 . 5) ;; Middle Center
+            (cons 1 (strcat "{\\fArial|b1;" curTag "}"))
+          )
+        )
+      )
+    )
+
+    (setq curTag (CadSetup:IncrementGridTag curTag)
+          i (1+ i))
+  )
+
+  ;; 5. Draw Horizontal Grid Lines (Y-Axis)
+  (setq curTag yStartTag
+        i 0)
+  (while (< i (length cumY))
+    (setq yVal (nth i cumY))
+
+    ;; Grid Line (03-GRID-LINE)
+    (setq pStart (_toWorld (- 0.0 gridExt) yVal)
+          pEnd   (_toWorld (+ xTot gridExt) yVal))
+    (entmake
+      (list
+        '(0 . "LINE")
+        '(100 . "AcDbEntity")
+        (cons 8 "03-GRID-LINE")
+        '(100 . "AcDbLine")
+        (cons 10 (trans pStart 1 0))
+        (cons 11 (trans pEnd 1 0))
+      )
+    )
+
+    ;; Left Bubble
+    (if hasLeftBubble
+      (progn
+        (setq pCircle (_toWorld (- 0.0 gridExt bubbleRad) yVal))
+        (entmake
+          (list
+            '(0 . "CIRCLE")
+            '(100 . "AcDbEntity")
+            (cons 8 "R-ANNO-SYMB")
+            '(100 . "AcDbCircle")
+            (cons 10 (trans pCircle 1 0))
+            (cons 40 bubbleRad)
+          )
+        )
+        (entmake
+          (list
+            '(0 . "MTEXT")
+            '(100 . "AcDbEntity")
+            (cons 8 "R-ANNO-SYMB")
+            '(100 . "AcDbMText")
+            (cons 10 (trans pCircle 1 0))
+            (cons 40 textHt)
+            '(71 . 5) ;; Middle Center
+            (cons 1 (strcat "{\\fArial|b1;" curTag "}"))
+          )
+        )
+      )
+    )
+
+    ;; Right Bubble
+    (if hasRightBubble
+      (progn
+        (setq pCircle (_toWorld (+ xTot gridExt bubbleRad) yVal))
+        (entmake
+          (list
+            '(0 . "CIRCLE")
+            '(100 . "AcDbEntity")
+            (cons 8 "R-ANNO-SYMB")
+            '(100 . "AcDbCircle")
+            (cons 10 (trans pCircle 1 0))
+            (cons 40 bubbleRad)
+          )
+        )
+        (entmake
+          (list
+            '(0 . "MTEXT")
+            '(100 . "AcDbEntity")
+            (cons 8 "R-ANNO-SYMB")
+            '(100 . "AcDbMText")
+            (cons 10 (trans pCircle 1 0))
+            (cons 40 textHt)
+            '(71 . 5) ;; Middle Center
+            (cons 1 (strcat "{\\fArial|b1;" curTag "}"))
+          )
+        )
+      )
+    )
+
+    (setq curTag (CadSetup:IncrementGridTag curTag)
+          i (1+ i))
+  )
+
+  ;; 6. Generate Automated Dimensions (R-ANNO-DIMS)
+  (if (or (= addBayDims 1) (= addTotalDims 1))
+    (progn
+      (setvar "CLAYER" "R-ANNO-DIMS")
+
+      ;; X-Axis Dimension Placements (Above Top)
+      (setq yBayDim (+ yTot gridExt (if hasTopBubble (* 2.0 bubbleRad) 0.0) dimOffset))
+      (setq yTotDim (+ yBayDim (if (= addBayDims 1) dimOffset 0.0)))
+
+      ;; Bay Dimensions along X
+      (if (= addBayDims 1)
+        (progn
+          (setq i 0)
+          (while (< i (1- (length cumX)))
+            (setq p1   (_toWorld (nth i cumX) yTot)
+                  p2   (_toWorld (nth (1+ i) cumX) yTot)
+                  pDim (_toWorld (* 0.5 (+ (nth i cumX) (nth (1+ i) cumX))) yBayDim))
+            (command "._dimaligned" "_non" p1 "_non" p2 "_non" pDim)
+            (setq i (1+ i))
+          )
+        )
+      )
+
+      ;; Total / Overall Dimension along X
+      (if (= addTotalDims 1)
+        (progn
+          (setq p1   (_toWorld 0.0 yTot)
+                p2   (_toWorld xTot yTot)
+                pDim (_toWorld (* 0.5 xTot) yTotDim))
+          (command "._dimaligned" "_non" p1 "_non" p2 "_non" pDim)
+        )
+      )
+
+      ;; Y-Axis Dimension Placements (To Left)
+      (setq xBayDim (- 0.0 (+ gridExt (if hasLeftBubble (* 2.0 bubbleRad) 0.0) dimOffset)))
+      (setq xTotDim (- xBayDim (if (= addBayDims 1) dimOffset 0.0)))
+
+      ;; Bay Dimensions along Y
+      (if (= addBayDims 1)
+        (progn
+          (setq i 0)
+          (while (< i (1- (length cumY)))
+            (setq p1   (_toWorld 0.0 (nth i cumY))
+                  p2   (_toWorld 0.0 (nth (1+ i) cumY))
+                  pDim (_toWorld xBayDim (* 0.5 (+ (nth i cumY) (nth (1+ i) cumY)))))
+            (command "._dimaligned" "_non" p1 "_non" p2 "_non" pDim)
+            (setq i (1+ i))
+          )
+        )
+      )
+
+      ;; Total / Overall Dimension along Y
+      (if (= addTotalDims 1)
+        (progn
+          (setq p1   (_toWorld 0.0 0.0)
+                p2   (_toWorld 0.0 yTot)
+                pDim (_toWorld xTotDim (* 0.5 yTot)))
+          (command "._dimaligned" "_non" p1 "_non" p2 "_non" pDim)
+        )
+      )
+    )
+  )
+
+  (CadSetup:UndoEnd)
+
+  (setvar "CLAYER" oldLayer)
+  (setvar "CMDECHO" oldEcho)
+  (princ (strcat "\n[GL] Grid System placed successfully (" 
+                 (itoa (length cumX)) "x" (itoa (length cumY)) " lines). Restored layer: " oldLayer))
+  (princ)
+)
+
+;; Dialog Controller: c:GRID-GENERATOR-DIALOG
+(defun c:GRID-GENERATOR-DIALOG ( / *error* dclPath dclId act
+                                   strX strXTag strY strYTag
+                                   popBubble bubbleRad gridExt textHt
+                                   bayDims totalDims dimOff
+                                   xList yList )
+
+  (defun *error* (msg)
+    (if (and dclId (>= dclId 0))
+      (vl-catch-all-apply 'unload_dialog (list dclId))
+    )
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*exit*,*quit*")))
+      (princ (strcat "\n[GL Error]: " msg))
+    )
+    (princ)
+  )
+
+  ;; Robust DCL search
+  (setq dclPath nil)
+  (cond
+    ((and (boundp 'CadSetup:GetDir) CadSetup:GetDir (setq dclPath (strcat (CadSetup:GetDir) "\\UI\\GRID-GENERATOR.dcl")) (findfile dclPath))
+     dclPath)
+    ((setq dclPath (findfile "GRID-GENERATOR.dcl"))
+     dclPath)
+    ((setq dclPath (findfile "UI\\GRID-GENERATOR.dcl"))
+     dclPath)
+    ((setq dclPath (findfile "d:\\Cad-Setup\\Cad-Setup-v4\\UI\\GRID-GENERATOR.dcl"))
+     dclPath)
+  )
+
+  (if (or (null dclPath) (not (findfile dclPath)))
+    (progn
+      (princ "\n[GL Error]: GRID-GENERATOR.dcl not found in UI/ directory.")
+      (exit)
+    )
+  )
+
+  (setq dclId (load_dialog dclPath))
+  (if (or (null dclId) (< dclId 0))
+    (progn
+      (princ (strcat "\n[GL Error]: Failed to load dialog file " dclPath))
+      (exit)
+    )
+  )
+
+  (if (not (new_dialog "grid_system_dialog" dclId))
+    (progn
+      (unload_dialog dclId)
+      (princ "\n[GL Error]: Dialog definition 'grid_system_dialog' not found in DCL.")
+      (exit)
+    )
+  )
+
+  ;; Initialize Pop-up list for bubble positions
+  (start_list "pop_bubble_pos")
+  (mapcar 'add_list '("0. Both Ends (Top/Bottom & Left/Right)"
+                      "1. Top & Left Only"
+                      "2. Bottom & Right Only"
+                      "3. None (Lines Only)"))
+  (end_list)
+
+  ;; Fixed Sensible Defaults
+  (set_tile "eb_x_spacings" "4*6000")
+  (set_tile "eb_x_tag"      "1")
+  (set_tile "eb_y_spacings" "3*5000")
+  (set_tile "eb_y_tag"      "A")
+  (set_tile "pop_bubble_pos"
+    (cond
+      ((= *GL-BUBBLE-POS* "Both")  "0")
+      ((= *GL-BUBBLE-POS* "Start") "1")
+      ((= *GL-BUBBLE-POS* "End")   "2")
+      ((= *GL-BUBBLE-POS* "None")  "3")
+      (t "0")
+    )
+  )
+  (set_tile "eb_bubble_rad"  (rtos *GL-BUBBLE-RAD* 2 1))
+  (set_tile "eb_grid_ext"    (rtos *GL-GRID-EXT* 2 1))
+  (set_tile "eb_text_height" (rtos *GL-TEXT-HT* 2 1))
+  (set_tile "tog_bay_dims"   "1")
+  (set_tile "tog_total_dims" "1")
+  (set_tile "eb_dim_offset"  "1200")
+
+  ;; Button Handlers
+  (action_tile "btn_single" "(done_dialog 2)")
+  (action_tile "cancel"     "(done_dialog 0)")
+  (action_tile "accept"
+    "(progn
+       (setq strX       (get_tile \"eb_x_spacings\")
+             strXTag    (get_tile \"eb_x_tag\")
+             strY       (get_tile \"eb_y_spacings\")
+             strYTag    (get_tile \"eb_y_tag\")
+             popBubble  (atoi (get_tile \"pop_bubble_pos\"))
+             bubbleRad  (distof (get_tile \"eb_bubble_rad\"))
+             gridExt    (distof (get_tile \"eb_grid_ext\"))
+             textHt     (distof (get_tile \"eb_text_height\"))
+             bayDims    (atoi (get_tile \"tog_bay_dims\"))
+             totalDims  (atoi (get_tile \"tog_total_dims\"))
+             dimOff     (distof (get_tile \"eb_dim_offset\")))
+       (done_dialog 1)
+     )"
+  )
+
+  (setq act (start_dialog))
+  (unload_dialog dclId)
+
+  ;; Dispatch user action
+  (cond
+    ((= act 1)
+     ;; Validate and process inputs
+     (setq xList (CadSetup:ParseGridSpacings strX))
+     (setq yList (CadSetup:ParseGridSpacings strY))
+
+     (if (or (null xList) (null yList))
+       (princ "\n[GL Error]: Invalid bay spacing syntax. Example: 4*6000 or 6000,5000,7500")
+       (progn
+         (if (and bubbleRad (> bubbleRad 0.0)) (setq *GL-BUBBLE-RAD* bubbleRad))
+         (if (and gridExt   (> gridExt 0.0))   (setq *GL-GRID-EXT* gridExt))
+         (if (and textHt    (> textHt 0.0))    (setq *GL-TEXT-HT* textHt))
+         (setq *GL-BUBBLE-POS*
+           (cond
+             ((= popBubble 0) "Both")
+             ((= popBubble 1) "Start")
+             ((= popBubble 2) "End")
+             ((= popBubble 3) "None")
+             (t "Both")
+           )
+         )
+
+         (CadSetup:DrawGridSystem xList strXTag yList strYTag
+                                  popBubble *GL-BUBBLE-RAD* *GL-GRID-EXT* *GL-TEXT-HT*
+                                  bayDims totalDims dimOff)
+       )
+     )
+    )
+    ((= act 2)
+     ;; Jump directly into Single Line Mode
+     (CadSetup:DrawSingleGridLine)
+    )
+    (t
+     (princ "\n[GL] Cancelled.")
+    )
+  )
+  (princ)
+)
+
+;; Main Command Entry Point: GL / 3
+(defun c:GL ( / opt )
+  (initget "Dialog Single Line GL 3")
+  (setq opt (getkword "\nGrid System [Dialog/Single Line] <Dialog>: "))
+  (cond
+    ((or (null opt) (= opt "Dialog") (= opt "D"))
+     (c:GRID-GENERATOR-DIALOG)
+    )
+    ((or (= opt "Single") (= opt "Line") (= opt "GL") (= opt "3"))
+     (CadSetup:DrawSingleGridLine)
+    )
+    (t
+     (c:GRID-GENERATOR-DIALOG)
+    )
+  )
   (princ)
 )
 
 (defun c:3 () (c:GL))
+
+;; Direct command shortcuts for Single Grid Line placement
+(defun c:GLS () (CadSetup:DrawSingleGridLine) (princ))
+(defun c:GL1 () (CadSetup:DrawSingleGridLine) (princ))
 
 
 ;;; --------------------------------------------------------------------------

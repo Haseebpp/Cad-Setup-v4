@@ -15,7 +15,7 @@
 ;;;              dynamic ISO A3 scale, title & metadata MText, center snap node)
 ;;;   [3] / GL : Grid Line & System Generator (Interactive DCL grid maker,
 ;;;              custom bay parsing, auto-bubbles, dimensions & single-line mode)
-;;;   [4] / ML : Material Line (Draws on "MATERIAL-LINE", restores previous layer)
+;;;   [4] / ML : Material Layer (Interactive DCL selector, layer setup & rectangle drawing)
 ;;;
 ;;; ==========================================================================
 
@@ -27,7 +27,7 @@
 (setq *WF-LAYER-HL* "01-HELP-LINE")     ;; Key 1: Construction / Help Line
 (setq *WF-LAYER-VP* "02-VIEW-PORT")     ;; Key 2: Viewport Boundary & Metadata
 (setq *WF-LAYER-GL* "03-GRID-LINE")     ;; Key 3: Structural / Layout Grid Line
-(setq *WF-LAYER-ML* "MATERIAL-LINE")    ;; Key 4: Material / Profile Line
+(setq *WF-LAYER-ML* nil)                ;; Key 4: Active Material Layer (set dynamically)
 
 
 ;;; --------------------------------------------------------------------------
@@ -1633,7 +1633,7 @@
   )
 )
 
-;; c:ML - Material Line / Rectangle Workflow Entry Point
+;; c:ML - Material Layer / Rectangle Workflow Entry Point
 (defun c:ML ( / matLayers ans promptStr kwStr kwMap suffix kw opt res chosenLayer )
   ;; 1. Check for existing R-MAT-* layers in active drawing
   (setq matLayers (CadSetup:GetDrawingMaterialLayers))

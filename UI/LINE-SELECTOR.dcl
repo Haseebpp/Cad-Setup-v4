@@ -1,14 +1,14 @@
 // =============================================================================
-// LINE-SELECTOR.dcl - Line Layer Selector & Inspector Dialog (LL / 5)
+// LINE-SELECTOR.dcl - Line Layer Selector & Inspector Dialog
 // Part of Cad-Setup-v4 Horizontal Layered Architecture
 // Layer: UI (Pure Dialog Control Language Specification)
 // =============================================================================
 
 line_selector_dialog : dialog {
-  label = "Line Layer Selection & Property Inspector (LL / 5)";
+  label = "Line Layer Selection && Property Inspector";
   fixed_width = true;
   alignment = centered;
-  width = 94;
+  width = 96;
 
   : spacer { height = 1; }
 
@@ -16,22 +16,20 @@ line_selector_dialog : dialog {
     // Left Column: Line Layers List
     : boxed_column {
       label = "Available Line Layers (R-LINE-*)";
-      width = 36;
+      width = 38;
 
       : list_box {
         key = "lst_lines";
-        width = 34;
-        height = 15;
-        fixed_width = true;
-        fixed_height = true;
+        width = 36;
+        height = 24;
         allow_accept = true;
       }
     }
 
     // Right Column: Properties, Linetype, and Description
     : boxed_column {
-      label = "Line Specifications & Direct Property Editors";
-      width = 56;
+      label = "Line Specifications && Direct Property Editors";
+      width = 58;
 
       : text {
         key = "txt_line_name";
@@ -105,22 +103,22 @@ line_selector_dialog : dialog {
 
       // 2. Multi-line Description (Word-Wrapped across 3 lines)
       : boxed_column {
-        label = "Line Scope & Specification Description";
+        label = "Line Scope && Specification Description";
 
         : text {
           key = "txt_line_desc1";
           label = "-";
-          width = 52;
+          width = 54;
         }
         : text {
           key = "txt_line_desc2";
           label = " ";
-          width = 52;
+          width = 54;
         }
         : text {
           key = "txt_line_desc3";
           label = " ";
-          width = 52;
+          width = 54;
         }
       }
 

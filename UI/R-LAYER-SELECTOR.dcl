@@ -1,11 +1,11 @@
 // =============================================================================
-// MATERIAL-SELECTOR.dcl - Material Layer Selector & Inspector Dialog
+// R-LAYER-SELECTOR.dcl - All R-* Layers Selector & Inspector Dialog
 // Part of Cad-Setup-v4 Horizontal Layered Architecture
 // Layer: UI (Pure Dialog Control Language Specification)
 // =============================================================================
 
-material_selector_dialog : dialog {
-  label = "Material Selection && Property Inspector";
+r_layer_selector_dialog : dialog {
+  label = "R-Layer Selection && Property Inspector";
   fixed_width = true;
   alignment = centered;
   width = 96;
@@ -13,13 +13,13 @@ material_selector_dialog : dialog {
   : spacer { height = 1; }
 
   : row {
-    // Left Column: Materials List
+    // Left Column: R-Layers List
     : boxed_column {
-      label = "Available Materials (R-MAT-*)";
+      label = "Available Project Layers (R-*)";
       width = 38;
 
       : list_box {
-        key = "lst_materials";
+        key = "lst_layers";
         width = 36;
         height = 28;
         allow_accept = true;
@@ -28,12 +28,12 @@ material_selector_dialog : dialog {
 
     // Right Column: Properties, Hatch, and Description
     : boxed_column {
-      label = "Material Specifications && Direct Property Editors";
+      label = "Layer Specifications && Direct Property Editors";
       width = 58;
 
       : text {
-        key = "txt_mat_name";
-        label = "Material: -";
+        key = "txt_layer_name";
+        label = "Layer: -";
         is_bold = true;
       }
 
@@ -55,7 +55,7 @@ material_selector_dialog : dialog {
           }
           : column {
             : text {
-              key = "txt_mat_color";
+              key = "txt_layer_color";
               label = "Color: -";
             }
             : button {
@@ -70,14 +70,14 @@ material_selector_dialog : dialog {
 
         // Linetype Dropdown
         : popup_list {
-          key = "pop_mat_ltype";
+          key = "pop_layer_ltype";
           label = "Linetype:       ";
           edit_width = 22;
         }
 
         // Lineweight Dropdown
         : popup_list {
-          key = "pop_mat_lweight";
+          key = "pop_layer_lweight";
           label = "Lineweight:     ";
           edit_width = 22;
         }
@@ -87,13 +87,13 @@ material_selector_dialog : dialog {
         // Transparency & Plottable in one row
         : row {
           : edit_box {
-            key = "eb_mat_trans";
+            key = "eb_layer_trans";
             label = "Transparency (0-90%):";
             edit_width = 6;
           }
           : spacer { width = 2; }
           : toggle {
-            key = "tog_mat_plot";
+            key = "tog_layer_plot";
             label = "Plottable Layer";
           }
         }
@@ -128,20 +128,20 @@ material_selector_dialog : dialog {
 
       // 3. Multi-line Description (Word-Wrapped across 3 lines)
       : boxed_column {
-        label = "Material Description && Finish Scope";
+        label = "Layer Scope && Specification Description";
 
         : text {
-          key = "txt_mat_desc1";
+          key = "txt_layer_desc1";
           label = "-";
           width = 54;
         }
         : text {
-          key = "txt_mat_desc2";
+          key = "txt_layer_desc2";
           label = " ";
           width = 54;
         }
         : text {
-          key = "txt_mat_desc3";
+          key = "txt_layer_desc3";
           label = " ";
           width = 54;
         }
@@ -169,10 +169,15 @@ material_selector_dialog : dialog {
     fixed_width = true;
 
     : button {
-      key = "btn_draw";
-      label = "Make Current and Draw (REC)";
+      key = "btn_draw_pl";
+      label = "Make Current and Draw (PL)";
       is_default = true;
-      width = 24;
+      width = 25;
+    }
+    : button {
+      key = "btn_draw_rec";
+      label = "Make Current and Draw (REC)";
+      width = 25;
     }
     : button {
       key = "btn_current";

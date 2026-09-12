@@ -65,12 +65,14 @@
 
 ;; A3SERIES : Generate A3 Scaled Reference Frames at Origin (1:1 to 1:50)
 (defun c:A3SERIES (/ *error* baseW baseH gap startPt currentScale 
-                     curW curH pt1 pt2 textHt textPt scaleList old-echo old-osmode)
+                     curW curH pt1 pt2 textHt textPt scaleList old-echo old-osmode old-layer)
   (setq old-echo   (getvar "CMDECHO")
-        old-osmode (getvar "OSMODE"))
+        old-osmode (getvar "OSMODE")
+        old-layer  (getvar "CLAYER"))
 
   (defun *error* (msg)
     (if old-osmode (setvar "OSMODE"  old-osmode))
+    (if old-layer  (setvar "CLAYER"  old-layer))
     (if old-echo   (setvar "CMDECHO" old-echo))
     (CadSetup:UndoReset)
     (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
@@ -89,7 +91,7 @@
 
   (setq startPt '(0.0 0.0 0.0))
 
-  (command "._-LAYER" "_M" "R-ANNO-FRAMES" "_C" "6" "" "")
+  (command "._-LAYER" "_M" "02-VIEW-PORT" "_C" "6" "" "")
 
   (setq scaleList '(1 5 10 15 20 25 30 35 40 45 50))
   
@@ -112,6 +114,7 @@
     (setq startPt (list (+ (car startPt) curW gap) (cadr startPt) (caddr startPt)))
   )
   
+  (if old-layer (setvar "CLAYER" old-layer))
   (CadSetup:UndoEnd)
   (setvar "CMDECHO" old-echo)
   (setvar "OSMODE"  old-osmode)

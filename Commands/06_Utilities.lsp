@@ -279,6 +279,37 @@
   (princ)
 )
 
+;;; --------------------------------------------------------------------------
+;;; 8. WIPEOUT TOOLS
+;;; --------------------------------------------------------------------------
+
+;; WR / WIPEOUTRECTANGLE : Interactively draw a rectangle and convert to wipeout
+(defun c:WIPEOUTRECTANGLE ( / *error* lastEnt newEnt )
+  (defun *error* (msg)
+    (CadSetup:UndoReset)
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[WR] Error: " msg))
+    )
+    (princ)
+  )
+  (setq lastEnt (entlast))
+  (CadSetup:UndoStart)
+  (command "_.rectang")
+  (while (> (getvar 'cmdactive) 0)
+    (command pause)
+  )
+  (setq newEnt (entlast))
+  (if (and newEnt (not (eq newEnt lastEnt)))
+    (command "_.wipeout" "_p" newEnt "_y")
+  )
+  (CadSetup:UndoEnd)
+  (princ)
+)
+
+(defun c:WR ()
+  (c:WIPEOUTRECTANGLE)
+)
+
 (if *CadSetup-Debug*
   (princ "\n[06_Utilities.lsp] Productivity utilities and system repair tools loaded.")
 )

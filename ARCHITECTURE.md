@@ -97,7 +97,7 @@ d:\Cad-Setup-v4\
 │   ├── 03_Blocks.lsp           ; Block creation & transforms (CB, OB, RB, RBH, RBV)
 │   ├── 04_Layout-Views.lsp     ; Viewport and presentation tools (LB, A3SERIES)
 │   ├── 05_Selection-Filters.lsp; Fast selection isolators (SR, SL, SB, SH, SA, SW)
-│   ├── 06_Utilities.lsp        ; Geometry utilities & repair (TC, CIP, BBOX, FL0, PUA, WF)
+│   ├── 06_Utilities.lsp        ; Geometry utilities & repair (TC, CIP, BBOX, FL0, PUA, WF, WR)
 │   └── 99_Aliases.lsp          ; AutoCAD command alias mapping & quick macros
 └── UI/
     ├── CAD-SETTINGS.dcl        ; Pure static DCL dialog interface definition

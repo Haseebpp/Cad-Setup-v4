@@ -288,6 +288,36 @@
   )
 )
 
+;; CadSetup:SetEntityTransparency - Applies object transparency (0 to 90) safely
+(defun CadSetup:SetEntityTransparency (entObj trans / tVal ename res)
+  (if (and entObj (numberp trans) (>= trans 0) (<= trans 90))
+    (progn
+      (setq tVal (fix trans))
+      ;; Method 1: ActiveX property (AutoCAD 2011+)
+      (setq res (vl-catch-all-apply 'vlax-put-property (list entObj 'EntityTransparency (itoa tVal))))
+      (if (vl-catch-all-error-p res)
+        ;; Fallback: CHPROP command
+        (progn
+          (setq ename (cond
+                        ((= (type entObj) 'VLA-OBJECT) (vlax-vla-object->ename entObj))
+                        ((= (type entObj) 'ENAME) entObj)
+                        (t nil)))
+          (if ename
+            (vl-catch-all-apply
+              (function (lambda ()
+                (setvar "CMDECHO" 0)
+                (command "_.CHPROP" ename "" "_Transparency" tVal "")
+              ))
+            )
+          )
+        )
+      )
+      T
+    )
+    nil
+  )
+)
+
 (if *CadSetup-Debug*
   (princ "\n[Helpers/Help_Graphics.lsp] 2D graphics primitives, text, hatch & draw order loaded.")
 )

@@ -122,6 +122,13 @@ material_selector_dialog : dialog {
             edit_width = 6;
           }
         }
+
+        : spacer { height = 1; }
+
+        : toggle {
+          key = "tog_auto_hatch";
+          label = "Smart Auto-Hatch (Fill boundaries with material pattern)";
+        }
       }
 
       : spacer { height = 1; }

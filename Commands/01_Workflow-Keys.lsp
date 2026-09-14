@@ -1768,6 +1768,11 @@
 ;;; 5. MATERIAL LAYER SELECTOR & CONTINUOUS RECTANGLE DRAWING (5 / ML)
 ;;; --------------------------------------------------------------------------
 
+;; Global session flag for Key 5 Smart Auto-Hatch
+(if (not (boundp '*CadSetup-AutoHatch-Enabled*))
+  (setq *CadSetup-AutoHatch-Enabled* T)
+)
+
 ;; CadSetup:GetDrawingMaterialLayers - Returns a sorted list of all active drawing layers matching "R-MAT-*"
 (defun CadSetup:GetDrawingMaterialLayers ( / layEntry layList )
   (setq layList nil)
@@ -1815,9 +1820,10 @@
   count
 )
 
-;; CadSetup:DrawContinuousRectangles - Continuously draws rectangles on specified layer until Enter/Esc
-(defun CadSetup:DrawContinuousRectangles (layName / *error* oldEcho pt1)
+;; CadSetup:DrawContinuousRectangles - Continuously draws rectangles on specified layer with Smart Auto-Hatch
+(defun CadSetup:DrawContinuousRectangles (layName / *error* oldEcho pt1 dbRow hPat hScl hRot hTrans hTargetLay rectEnt rectObj hObj)
   (defun *error* (msg)
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
     (if oldEcho (setvar "CMDECHO" oldEcho))
     (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
       (princ (strcat "\n[ML] Error: " msg))
@@ -1830,12 +1836,65 @@
   (CadSetup:SetCurrentLayerSafe layName)
   (setq *WF-LAYER-ML* layName)
   (princ (strcat "\n[ML] Current layer set to: " layName))
+
+  ;; Lookup layer's preset hatching specifications from active in-memory DB
+  (setq dbRow (if (boundp 'CadSetup:GetLayerData) (CadSetup:GetLayerData layName) nil))
+  (if (null dbRow)
+    (setq dbRow (assoc (strcase layName) (if (boundp '*CadSetup-Layers-Data*) *CadSetup-Layers-Data* nil)))
+  )
+  (if dbRow
+    (setq hPat   (if (nth 6 dbRow) (vl-princ-to-string (nth 6 dbRow)) "NONE")
+          hScl   (if (numberp (nth 7 dbRow)) (nth 7 dbRow) 1.0)
+          hRot   (if (numberp (nth 8 dbRow)) (nth 8 dbRow) 0.0)
+          hTrans (if (numberp (nth 9 dbRow)) (nth 9 dbRow) 0))
+    (setq hPat "NONE" hScl 1.0 hRot 0.0 hTrans 0)
+  )
+
+  ;; Target hatch layer: dedicated R-HTCH-GENR or system HPLAYER
+  (setq hTargetLay (if (and (boundp '*DEFAULT-HPLAYER*) *DEFAULT-HPLAYER* (/= *DEFAULT-HPLAYER* ""))
+                     *DEFAULT-HPLAYER*
+                     "R-HTCH-GENR"))
+
+  (if (and *CadSetup-AutoHatch-Enabled* hPat (/= (strcase hPat) "NONE") (/= hPat ""))
+    (princ (strcat "\n[ML Smart Auto-Hatch: ON] Pattern: " hPat " | Scale: " (rtos hScl 2 2) " | Rot: " (rtos hRot 2 1) " deg | Target: " hTargetLay))
+    (princ "\n[ML Smart Auto-Hatch: OFF or Pattern is NONE]")
+  )
   (princ "\n[ML] Continuous Rectangle Mode: Pick two corners per rectangle (Press Enter or Esc when finished)...")
 
   (while (setq pt1 (getpoint "\nSpecify first corner point or [Enter to finish]: "))
+    (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
     (setvar "CMDECHO" 1)
     (command "._rectang" pt1 pause)
     (setvar "CMDECHO" 0)
+
+    (if (and *CadSetup-AutoHatch-Enabled*
+             hPat
+             (/= (strcase hPat) "NONE")
+             (/= hPat ""))
+      (progn
+        (setq rectEnt (entlast))
+        (if (and rectEnt (setq rectObj (vlax-ename->vla-object rectEnt)))
+          (progn
+            ;; Generate associative hatch on dedicated hatch layer
+            (setq hObj (CadSetup:CreateHatch rectObj hPat hScl hRot nil hTargetLay))
+            (if hObj
+              (progn
+                ;; Apply material transparency if specified (> 0)
+                (if (and (numberp hTrans) (> hTrans 0))
+                  (CadSetup:SetEntityTransparency hObj hTrans)
+                )
+                (princ (strcat "\n[ML Auto-Hatch] Filled boundary with " hPat " (Scale " (rtos hScl 2 2) ") on " hTargetLay "."))
+              )
+              (princ (strcat "\n[ML Auto-Hatch Warning] Failed to generate hatch pattern '" hPat "'."))
+            )
+          )
+        )
+      )
+      (if (and *CadSetup-AutoHatch-Enabled* (or (null hPat) (= (strcase hPat) "NONE") (= hPat "")))
+        (princ "\n[ML] Rectangle created. (Hatch skipped: Pattern set to NONE).")
+      )
+    )
+    (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
   )
 
   (setvar "CMDECHO" oldEcho)
@@ -2017,8 +2076,13 @@
 
   ;; Initial display
   (updateDetails selLayer)
+  (set_tile "tog_auto_hatch" (if *CadSetup-AutoHatch-Enabled* "1" "0"))
 
   ;; Callbacks
+  (action_tile "tog_auto_hatch"
+    "(setq *CadSetup-AutoHatch-Enabled* (= $value \"1\"))"
+  )
+
   (action_tile "lst_materials"
     "(setq selIdx (atoi $value)
            selLayer (nth selIdx matLayers))
@@ -2180,11 +2244,10 @@
       (princ)
     )
     (progn
-      ;; 3. Build Command-Line Keywords and Prompt
-      ;; Format: [Dialog/SUFFIX1/SUFFIX2/...] <Dialog>:
-      (setq kwMap '(("DIALOG" . "DIALOG") ("D" . "DIALOG")))
-      (setq promptStr "\nSelect Material [Dialog")
-      (setq kwStr "Dialog D")
+      ;; 3. Build Command-Line Keywords and Prompt Map
+      (setq kwMap '(("DIALOG" . "DIALOG") ("D" . "DIALOG")
+                    ("AUTOHATCH" . "AUTOHATCH") ("AH" . "AUTOHATCH") ("A" . "AUTOHATCH")))
+      (setq kwStr "Dialog D AutoHatch AH A")
 
       (foreach lay matLayers
         ;; Extract suffix after "R-MAT-"
@@ -2192,14 +2255,29 @@
         (setq kw (strcase (vl-string-translate " " "_" suffix)))
         ;; Store in keyword-to-layer lookup map
         (setq kwMap (cons (cons kw lay) kwMap))
-        (setq promptStr (strcat promptStr "/" suffix))
         (setq kwStr (strcat kwStr " " kw))
       )
-      (setq promptStr (strcat promptStr "] <Dialog>: "))
 
-      ;; 4. Prompt User
-      (initget kwStr)
-      (setq opt (getkword promptStr))
+      ;; 4. Prompt User (Loop allows toggling AutoHatch without exiting command)
+      (setq opt "AUTOHATCH")
+      (while (and opt (or (= (strcase opt) "AUTOHATCH") (= (strcase opt) "AH") (= (strcase opt) "A")))
+        (setq promptStr (strcat "\nSelect Material (AutoHatch: " (if *CadSetup-AutoHatch-Enabled* "ON" "OFF") ") [Dialog/AutoHatch"))
+        (foreach lay matLayers
+          (setq suffix (if (> (strlen lay) 6) (substr lay 7) lay))
+          (setq promptStr (strcat promptStr "/" suffix))
+        )
+        (setq promptStr (strcat promptStr "] <Dialog>: "))
+
+        (initget kwStr)
+        (setq opt (getkword promptStr))
+
+        (if (and opt (or (= (strcase opt) "AUTOHATCH") (= (strcase opt) "AH") (= (strcase opt) "A")))
+          (progn
+            (setq *CadSetup-AutoHatch-Enabled* (not *CadSetup-AutoHatch-Enabled*))
+            (princ (strcat "\n[ML] Smart Auto-Hatch is now " (if *CadSetup-AutoHatch-Enabled* "ON" "OFF") "."))
+          )
+        )
+      )
 
       ;; Default is Dialog if Enter pressed
       (if (or (null opt) (= (strcase opt) "DIALOG") (= (strcase opt) "D"))

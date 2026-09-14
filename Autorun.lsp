@@ -83,8 +83,8 @@
     (princ "\n CadSetup v4.0 - Architectural & Fitout Drafting Suite [WARN]")
     (princ "\n CadSetup v4.0 - Architectural & Fitout Drafting Suite [OK]")
   )
-  (princ "\n Standards : Production Layers, Linetypes, & Dimstyles Active")
-  (princ "\n Shortcuts : CAD-SETTINGS | RL (Reload Layers) | RCS | Keys: 1-4")
+  (princ "\n Status    : Commands Loaded (Run 'LOAD-LAYERS' or 'RL' to load standards)")
+  (princ "\n Shortcuts : LOAD-LAYERS (RL) | LOAD-STYLES (LST) | CAD-SETTINGS | Keys: 1-4")
   (if (> errCount 0)
     (princ (strcat "\n Notice    : " (itoa errCount) " module(s) had load errors. Type CAD-SETUP-DEBUG and RCS to inspect."))
   )
@@ -151,114 +151,13 @@
 ;; 3. CORE DRAWING INITIALIZATION ROUTINE (RUNS ON DRAWING OPEN)
 ;; ===========================================================================
 
-(defun CadSetup:Initialize ( / *error* doc loadRes )
-
+(defun CadSetup:Initialize ( / loadRes )
   (vl-load-com)
 
-  ;; First, load all architecture layers so all helpers & database are active
+  ;; Load all architecture layers so all helpers, database, commands & UI are active
   (setq loadRes (LOAD-COMMAND-SUITES))
 
-  ;; Scoped local error handler
-  (defun *error* (msg)
-    (CadSetup:UndoReset)
-    (if (and msg (not (wcmatch (strcase msg) "*CANCEL*,*QUIT*")))
-      (princ (strcat "\n[CadSetup ERR]: " msg))
-    )
-    (princ)
-  )
-
-  (CadSetup:UndoStart)
-  (setvar "CMDECHO" 0)
-
-  (if *CadSetup-Debug*
-    (princ "\nGenerating production layer standards and styles...")
-  )
-
-  ;; -------------------------------------------------------------------------
-  ;; A. LOAD STANDARD LINETYPES
-  ;; -------------------------------------------------------------------------
-  (foreach lt '(
-                ;; Hidden & Concealed Details
-                "HIDDEN"   "HIDDEN2"   "HIDDENX2"
-                ;; Centerlines & Grid References
-                "CENTER"   "CENTER2"   "CENTERX2"
-                ;; Phantom & Overhead / Boundary / Alternates
-                "PHANTOM"  "PHANTOM2"  "PHANTOMX2"
-                ;; Dashed (Standard, Half, Double)
-                "DASHED"   "DASHED2"   "DASHEDX2"
-                ;; Dot & Dash-Dot Series
-                "DOT"      "DOT2"      "DOTX2"
-                "DASHDOT"  "DASHDOT2"  "DASHDOTX2"
-                ;; Divide & Border Series
-                "DIVIDE"   "DIVIDE2"   "DIVIDEX2"
-                "BORDER"   "BORDER2"   "BORDERX2"
-                ;; Specialized Detail Patterns
-                "BATTING"
-                "ZIGZAG"
-               )
-    (CadSetup:LoadLinetype lt)
-  )
-
-  ;; -------------------------------------------------------------------------
-  ;; B. GENERATE LAYERS FROM DATABASE/Db_Layers.lsp
-  ;; -------------------------------------------------------------------------
-  (CadSetup:LoadAllLayers)
-
-  ;; -------------------------------------------------------------------------
-  ;; C. TYPOGRAPHY (Annotative & Scalable)
-  ;; -------------------------------------------------------------------------
-  (if (not (tblsearch "style" "ARCH-TEXT"))
-    (command "-style" "ARCH-TEXT" "arial.ttf" "0.0" "1.0" "0" "_N" "_N")
-  )
-  (if (not (tblsearch "style" "ARCH-TITLE"))
-    (command "-style" "ARCH-TITLE" "arialbd.ttf" "0.0" "1.0" "0" "_N" "_N")
-  )
-
-  ;; -------------------------------------------------------------------------
-  ;; D. ANNOTATIVE DIMENSION STYLES
-  ;; -------------------------------------------------------------------------
-  (setvar "DIMTXSTY" "ARCH-TEXT")
-  (setvar "DIMTXT"   2.5)         ; Plotted height = 2.5 mm
-  (setvar "DIMTAD"   1)           ; Text above line
-  (setvar "DIMJUST"  0)           ; Centered
-  (setvar "DIMGAP"   0.8)         ; Gap between line and text
-  (setvar "DIMEXE"   1.2)         ; Extension past dim line
-  (setvar "DIMEXO"   1.0)         ; Extension line origin offset
-  (setvar "DIMLUNIT" 2)           ; Decimal
-  (setvar "DIMDEC"   0)           ; 0 decimal places
-  (setvar "DIMZIN"   8)           ; Suppress trailing zeros
-  (setvar "DIMCLRD"  256)         ; ByLayer
-  (setvar "DIMCLRE"  256)         ; ByLayer
-  (setvar "DIMCLRT"  256)         ; ByLayer
-  (setvar "DIMLWD"   18)          ; 0.18 mm
-  (setvar "DIMLWE"   18)          ; 0.18 mm
-  (setvar "DIMTOFL"  1)           ; Force line between points
-
-  ;; D1. Save ARCH-TICK (Annotative architectural tick)
-  (setvar "DIMBLK" "_ArchTick")
-  (setvar "DIMASZ" 1.5)
-  (if (tblsearch "dimstyle" "ARCH-TICK")
-    (command "-dimstyle" "_save" "ARCH-TICK" "_yes")
-    (command "-dimstyle" "_save" "ARCH-TICK")
-  )
-
-  ;; D2. Save ARCH-ARROW (Annotative closed arrow)
-  (setvar "DIMBLK" ".")
-  (setvar "DIMASZ" 2.2)
-  (if (tblsearch "dimstyle" "ARCH-ARROW")
-    (command "-dimstyle" "_save" "ARCH-ARROW" "_yes")
-    (command "-dimstyle" "_save" "ARCH-ARROW")
-  )
-
-  (command "-dimstyle" "_restore" "ARCH-TICK")
-
-  ;; -------------------------------------------------------------------------
-  ;; E. ENVIRONMENT DEFAULTS & ACTIVE LAYERS
-  ;; -------------------------------------------------------------------------
-  (CadSetup:SetDefaultCurrentLayers)
-
-  (CadSetup:UndoEnd)
-
+  ;; Display clean status summary banner
   (CadSetup:PrintBanner (cadr loadRes))
   (princ)
 )

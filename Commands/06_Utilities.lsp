@@ -2,6 +2,7 @@
 ;;; 06_Utilities.lsp - Drawing Cleanup, Measurement, System Fixes & Utilities
 ;;; Layer: Commands (Priority 06)
 ;;; Author   : Haseeb
+;;; Commands : LOAD-STYLES (LST)
 ;;; ==========================================================================
 
 (vl-load-com)
@@ -310,7 +311,87 @@
   (c:WIPEOUTRECTANGLE)
 )
 
+;;; --------------------------------------------------------------------------
+;;; 9. PRODUCTION TEXT & DIMENSION STYLES LOADER
+;;; --------------------------------------------------------------------------
+
+;; CadSetup:LoadStandardStyles - Generates annotative text styles & dimstyles
+(defun CadSetup:LoadStandardStyles ( / oldEcho )
+  (setq oldEcho (getvar "CMDECHO"))
+  (setvar "CMDECHO" 0)
+
+  ;; -------------------------------------------------------------------------
+  ;; A. TYPOGRAPHY (Annotative & Scalable)
+  ;; -------------------------------------------------------------------------
+  (if (not (tblsearch "style" "ARCH-TEXT"))
+    (command "-style" "ARCH-TEXT" "arial.ttf" "0.0" "1.0" "0" "_N" "_N")
+  )
+  (if (not (tblsearch "style" "ARCH-TITLE"))
+    (command "-style" "ARCH-TITLE" "arialbd.ttf" "0.0" "1.0" "0" "_N" "_N")
+  )
+
+  ;; -------------------------------------------------------------------------
+  ;; B. ANNOTATIVE DIMENSION STYLES
+  ;; -------------------------------------------------------------------------
+  (setvar "DIMTXSTY" "ARCH-TEXT")
+  (setvar "DIMTXT"   2.5)         ; Plotted height = 2.5 mm
+  (setvar "DIMTAD"   1)           ; Text above line
+  (setvar "DIMJUST"  0)           ; Centered
+  (setvar "DIMGAP"   0.8)         ; Gap between line and text
+  (setvar "DIMEXE"   1.2)         ; Extension past dim line
+  (setvar "DIMEXO"   1.0)         ; Extension line origin offset
+  (setvar "DIMLUNIT" 2)           ; Decimal
+  (setvar "DIMDEC"   0)           ; 0 decimal places
+  (setvar "DIMZIN"   8)           ; Suppress trailing zeros
+  (setvar "DIMCLRD"  256)         ; ByLayer
+  (setvar "DIMCLRE"  256)         ; ByLayer
+  (setvar "DIMCLRT"  256)         ; ByLayer
+  (setvar "DIMLWD"   18)          ; 0.18 mm
+  (setvar "DIMLWE"   18)          ; 0.18 mm
+  (setvar "DIMTOFL"  1)           ; Force line between points
+
+  ;; B1. Save ARCH-TICK (Annotative architectural tick)
+  (setvar "DIMBLK" "_ArchTick")
+  (setvar "DIMASZ" 1.5)
+  (if (tblsearch "dimstyle" "ARCH-TICK")
+    (command "-dimstyle" "_save" "ARCH-TICK" "_yes")
+    (command "-dimstyle" "_save" "ARCH-TICK")
+  )
+
+  ;; B2. Save ARCH-ARROW (Annotative closed arrow)
+  (setvar "DIMBLK" ".")
+  (setvar "DIMASZ" 2.2)
+  (if (tblsearch "dimstyle" "ARCH-ARROW")
+    (command "-dimstyle" "_save" "ARCH-ARROW" "_yes")
+    (command "-dimstyle" "_save" "ARCH-ARROW")
+  )
+
+  (command "-dimstyle" "_restore" "ARCH-TICK")
+  (setvar "CMDECHO" oldEcho)
+  T
+)
+
+;; LOAD-STYLES / LST : Loads production text and dimension styles on demand
+(defun c:LOAD-STYLES ( / *error* )
+  (defun *error* (msg)
+    (CadSetup:UndoReset)
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[LST] Error: " msg))
+    )
+    (princ)
+  )
+
+  (CadSetup:UndoStart)
+  (princ "\n[LST] Loading production typography and dimension styles...")
+  (CadSetup:LoadStandardStyles)
+  (CadSetup:UndoEnd)
+  (princ "\n[OK] Standard Text Styles (ARCH-TEXT, ARCH-TITLE) & Dimstyles (ARCH-TICK, ARCH-ARROW) loaded.")
+  (princ)
+)
+
+(defun c:LST () (c:LOAD-STYLES))
+
 (if *CadSetup-Debug*
-  (princ "\n[06_Utilities.lsp] Productivity utilities and system repair tools loaded.")
+  (princ "\n[06_Utilities.lsp] Productivity utilities, styles loader and system repair tools loaded.")
 )
 (princ)

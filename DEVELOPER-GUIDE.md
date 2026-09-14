@@ -34,7 +34,7 @@ To prevent symbol collision across files and ensure clean maintainability:
 | **Global Helper Functions**| `CadSetup:VerbNoun` | `CadSetup:GetBoundingBoxUcs` | Namespaced with prefix, PascalCase |
 | **Global Data Tables** | `*CadSetup-Noun-Data*` | `*CadSetup-Layers-Data*` | Asterisk-wrapped earmuffs |
 | **Local Variables** | `camelCase` or `kebab-case` | `minPt`, `oldEcho`, `base-pt` | Kept local in `/ ...` parameter list |
-| **Command Aliases** | 1 to 3 characters | `1`, `2`, `CB`, `TC`, `LB` | Ergonomic drafting keystrokes |
+| **Command Aliases** | 1 to 3 characters | `1`, `2`, `CB`, `TC`, `TS` | Ergonomic drafting keystrokes |
 
 ---
 

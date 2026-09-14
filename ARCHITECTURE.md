@@ -95,7 +95,7 @@ d:\Cad-Setup-v4\
 │   ├── 01_Workflow-Keys.lsp    ; Fast drafting key shortcuts (1, 2, 3, 4, 5, -)
 │   ├── 02_Layers.lsp           ; Layer management commands (RL, DCL, L0, BLL)
 │   ├── 03_Blocks.lsp           ; Block creation & transforms (CB, OB, RB, RBH, RBV)
-│   ├── 04_Layout-Views.lsp     ; Viewport and presentation tools (LB, A3SERIES)
+│   ├── 04_Layout-Views.lsp     ; Viewport and presentation tools (TS, A3SERIES)
 │   ├── 05_Selection-Filters.lsp; Fast selection isolators (SR, SL, SB, SH, SA, SW)
 │   ├── 06_Utilities.lsp        ; Geometry utilities & repair (TC, CIP, BBOX, FL0, PUA, WF, WR)
 │   └── 99_Aliases.lsp          ; AutoCAD command alias mapping & quick macros

@@ -7,11 +7,11 @@
 (vl-load-com)
 
 ;;; --------------------------------------------------------------------------
-;;; 1. PRESENTATION THEME SWITCHER (LB)
+;;; 1. PRESENTATION THEME SWITCHER (TS)
 ;;; --------------------------------------------------------------------------
 
-;; LB : Toggle Layout between Dark Mode and Presentation White Paper (with Plot Styles)
-(defun c:LB ( / acadApp doc prefObj dispPref layouts actLay isPlotStyleOn darkColor whiteColor )
+;; TS : Toggle Layout between Dark Mode and Presentation White Paper (with Plot Styles)
+(defun c:TS ( / acadApp doc prefObj dispPref layouts actLay isPlotStyleOn darkColor whiteColor )
   (setq acadApp    (CadSetup:GetAcad)
         doc        (CadSetup:GetDoc)
         prefObj    (if acadApp (vla-get-preferences acadApp))
@@ -37,7 +37,7 @@
             )
           )
           (vla-regen doc 1)
-          (princ "\n[LB] Switched to Dark Drafting Mode.")
+          (princ "\n[TS] Switched to Dark Drafting Mode.")
         )
         ;; Switch to White Presentation Mode
         (progn
@@ -50,11 +50,11 @@
             )
           )
           (vla-regen doc 1)
-          (princ "\n[LB] Switched to White Presentation Mode.")
+          (princ "\n[TS] Switched to White Presentation Mode.")
         )
       )
     )
-    (princ "\n[LB] Active layout or display preferences not available.")
+    (princ "\n[TS] Active layout or display preferences not available.")
   )
   (princ)
 )

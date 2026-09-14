@@ -81,6 +81,7 @@ d:\Cad-Setup-v4\
 │   ├── 00_Init.lsp             ; Path resolution, logging, environment checks
 │   └── 01_Undo-Manager.lsp     ; Re-entrant Undo-mark wrappers (UndoStart / UndoEnd)
 ├── Database/
+│   ├── Db_Blocks.lsp           ; Master standard joinery block dictionary & procedural geometry data
 │   ├── Db_Layers.lsp           ; Master layer dictionary & properties (colors, lineweights)
 │   ├── Db_SysVars.lsp          ; Recommended system variables & drawing states
 │   └── Db_Presets.lsp          ; Workspace presets (11 industry drafting profiles)
@@ -92,14 +93,15 @@ d:\Cad-Setup-v4\
 │   └── Help_Selection.lsp      ; ssget filters, predicates (is-annotation, is-revcloud)
 ├── Commands/
 │   ├── 00_System-Variables.lsp ; Applies sysvars from Database/Db_SysVars.lsp
-│   ├── 01_Workflow-Keys.lsp    ; Fast drafting key shortcuts (1, 2, 3, 4, 5, 6, 7, -)
+│   ├── 01_Workflow-Keys.lsp    ; Fast drafting key shortcuts (1, 2, 3, 4, 5, 6, 7, 8, -)
 │   ├── 02_Layers.lsp           ; Layer management commands (RL, DCL, L0, BLL)
-│   ├── 03_Blocks.lsp           ; Block creation & transforms (CB, OB, RB, RBH, RBV)
+│   ├── 03_Blocks.lsp           ; Block creation, transforms & visual palette (CB, OB, RB, RBH, RBV, BL, 8)
 │   ├── 04_Layout-Views.lsp     ; Viewport and presentation tools (TS, A3SERIES)
 │   ├── 05_Selection-Filters.lsp; Fast selection isolators (SR, SL, SB, SH, SA, SW)
 │   ├── 06_Utilities.lsp        ; Geometry utilities & repair (TC, CIP, BBOX, FL0, PUA, WF, WR)
 │   └── 99_Aliases.lsp          ; AutoCAD command alias mapping & quick macros
 └── UI/
+    ├── BLOCK-PALETTE.dcl       ; Visual Standard Joinery Blocks & Components Palette DCL
     ├── CAD-SETTINGS.dcl        ; Pure static DCL dialog interface definition
     ├── CAD-SETTINGS-CTRL.lsp   ; Dialog event handlers, preview renderer & presets
     ├── GRID-GENERATOR.dcl      ; Parametric structural grid dialog

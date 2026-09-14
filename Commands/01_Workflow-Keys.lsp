@@ -19,6 +19,7 @@
 ;;;   [5] / ML : Material Layer (Interactive DCL selector, layer setup & rectangle drawing)
 ;;;   [6] / AD : Annotation & Dim Suite (Interactive DCL selector & layer switcher for R-ANNO-*)
 ;;;   [7] / HD : Fittings & Hardware (Interactive DCL selector & layer switcher for R-HARD-*)
+;;;   [8] / BL : Blocks & Components (Visual DCL insertion palette for standard joinery blocks)
 ;;;   [-] / R- : R-Layer Selector (Interactive DCL inspector, layer setup & PL/REC drawing)
 ;;;
 ;;; ==========================================================================
@@ -2297,6 +2298,16 @@
 
 (defun c:7 () (c:HD))
 
+;; Key 8: Blocks & Components Palette (Delegates to CadSetup:OpenBlockPalette)
+(defun c:BL ()
+  (if (boundp 'CadSetup:OpenBlockPalette)
+    (CadSetup:OpenBlockPalette)
+    (princ "\n[BL] Block Palette module not loaded.")
+  )
+  (princ)
+)
+(defun c:8 () (c:BL))
+
 
 ;;; --------------------------------------------------------------------------
 ;;; 6. ALL R-LAYERS SELECTOR & GEOMETRY DRAWING (` / - / R- / RLAY)
@@ -2768,6 +2779,6 @@
 
 
 (if *CadSetup-Debug*
-  (princ "\n[01_Workflow-Keys.lsp] Workflow keys (1=HL, 2=VP, 3=GL, 4=LL, 5=ML, 6=AD, 7=HD, `=R-) loaded.")
+  (princ "\n[01_Workflow-Keys.lsp] Workflow keys (1=HL, 2=VP, 3=GL, 4=LL, 5=ML, 6=AD, 7=HD, 8=BL, `=R-) loaded.")
 )
 (princ)

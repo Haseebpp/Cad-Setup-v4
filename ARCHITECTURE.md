@@ -103,9 +103,7 @@ d:\Cad-Setup-v4\
     ├── CAD-SETTINGS.dcl        ; Pure static DCL dialog interface definition
     ├── CAD-SETTINGS-CTRL.lsp   ; Dialog event handlers, preview renderer & presets
     ├── GRID-GENERATOR.dcl      ; Parametric structural grid dialog
-    ├── MATERIAL-SELECTOR.dcl   ; Material layer selection & property inspector DCL
-    ├── LINE-SELECTOR.dcl       ; Line layer selection & property inspector DCL
-    └── R-LAYER-SELECTOR.dcl    ; All R-* layers selection & property inspector DCL
+    └── UNIFIED-LAYER-SELECTOR.dcl ; Unified Dynamic Layer Selector (UDLS) & Inspector DCL
 ```
 
 ---

@@ -1,21 +1,22 @@
 // =============================================================================
-// R-LAYER-SELECTOR.dcl - All R-* Layers Selector & Inspector Dialog
+// UNIFIED-LAYER-SELECTOR.dcl - Unified Dynamic Layer Selector & Inspector Dialog
 // Part of Cad-Setup-v4 Horizontal Layered Architecture
 // Layer: UI (Pure Dialog Control Language Specification)
 // =============================================================================
 
-r_layer_selector_dialog : dialog {
-  label = "R-Layer Selection && Property Inspector";
+unified_layer_selector_dialog : dialog {
+  label = "Layer Selection && Property Inspector";
   fixed_width = true;
   alignment = centered;
-  width = 96;
+  width = 98;
 
   : spacer { height = 1; }
 
   : row {
-    // Left Column: R-Layers List
+    // Left Column: Filtered Project Layers List
     : boxed_column {
-      label = "Available Project Layers (R-*)";
+      key = "box_layers_list";
+      label = "Available Project Layers";
       width = 38;
 
       : list_box {
@@ -29,7 +30,7 @@ r_layer_selector_dialog : dialog {
     // Right Column: Properties, Hatch, and Description
     : boxed_column {
       label = "Layer Specifications && Direct Property Editors";
-      width = 58;
+      width = 60;
 
       : text {
         key = "txt_layer_name";
@@ -103,6 +104,7 @@ r_layer_selector_dialog : dialog {
 
       // 2. Editable Hatch Specifications (Db_Layers)
       : boxed_column {
+        key = "box_hatch_specs";
         label = "Associated Hatch Specs (In-Memory Session)";
 
         : row {
@@ -122,6 +124,13 @@ r_layer_selector_dialog : dialog {
             edit_width = 6;
           }
         }
+
+        : spacer { height = 1; }
+
+        : toggle {
+          key = "tog_auto_hatch";
+          label = "Smart Auto-Hatch (Fill boundaries with pattern)";
+        }
       }
 
       : spacer { height = 1; }
@@ -133,17 +142,17 @@ r_layer_selector_dialog : dialog {
         : text {
           key = "txt_layer_desc1";
           label = "-";
-          width = 54;
+          width = 56;
         }
         : text {
           key = "txt_layer_desc2";
           label = " ";
-          width = 54;
+          width = 56;
         }
         : text {
           key = "txt_layer_desc3";
           label = " ";
-          width = 54;
+          width = 56;
         }
       }
 
@@ -171,7 +180,6 @@ r_layer_selector_dialog : dialog {
     : button {
       key = "btn_draw_pl";
       label = "Make Current and Draw (PL)";
-      is_default = true;
       width = 25;
     }
     : button {

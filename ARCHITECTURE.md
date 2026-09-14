@@ -92,7 +92,7 @@ d:\Cad-Setup-v4\
 │   └── Help_Selection.lsp      ; ssget filters, predicates (is-annotation, is-revcloud)
 ├── Commands/
 │   ├── 00_System-Variables.lsp ; Applies sysvars from Database/Db_SysVars.lsp
-│   ├── 01_Workflow-Keys.lsp    ; Fast drafting key shortcuts (1, 2, 3, 4, 5, -)
+│   ├── 01_Workflow-Keys.lsp    ; Fast drafting key shortcuts (1, 2, 3, 4, 5, 6, 7, -)
 │   ├── 02_Layers.lsp           ; Layer management commands (RL, DCL, L0, BLL)
 │   ├── 03_Blocks.lsp           ; Block creation & transforms (CB, OB, RB, RBH, RBV)
 │   ├── 04_Layout-Views.lsp     ; Viewport and presentation tools (TS, A3SERIES)

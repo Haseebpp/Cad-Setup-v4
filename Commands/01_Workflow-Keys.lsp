@@ -17,6 +17,8 @@
 ;;;              custom bay parsing, auto-bubbles, dimensions & single-line mode)
 ;;;   [4] / LL : Line Layer (Interactive DCL selector, layer setup & polyline drawing)
 ;;;   [5] / ML : Material Layer (Interactive DCL selector, layer setup & rectangle drawing)
+;;;   [6] / AD : Annotation & Dim Suite (Interactive DCL selector & layer switcher for R-ANNO-*)
+;;;   [7] / HD : Fittings & Hardware (Interactive DCL selector & layer switcher for R-HARD-*)
 ;;;   [-] / R- : R-Layer Selector (Interactive DCL inspector, layer setup & PL/REC drawing)
 ;;;
 ;;; ==========================================================================
@@ -31,6 +33,8 @@
 (setq *WF-LAYER-GL* "03-GRID-LINE")     ;; Key 3: Structural / Layout Grid Line
 (setq *WF-LAYER-LL* nil)                ;; Key 4: Active Line Layer (set dynamically)
 (setq *WF-LAYER-ML* nil)                ;; Key 5: Active Material Layer (set dynamically)
+(setq *WF-LAYER-AD* nil)                ;; Key 6: Active Annotation Layer (set dynamically)
+(setq *WF-LAYER-HD* nil)                ;; Key 7: Active Hardware Layer (set dynamically)
 (setq *WF-LAYER-RL* nil)                ;; Key -: Active R-Layer (set dynamically)
 (setq *WF-TOOL-RL* "Polyline")          ;; Key -: Default drawing tool ("Polyline" or "Rectangle")
 
@@ -1451,6 +1455,68 @@
   count
 )
 
+;; CadSetup:EnsureAnnotationLayersLoaded - Creates standard annotation layers from Db_Layers.lsp if missing
+(defun CadSetup:EnsureAnnotationLayersLoaded ( / allData count row lName lCol lPlotCol lType lWt lPlot lHatch lHScale lHRot lTrans lLocked lDesc )
+  (setq allData (if (boundp '*CadSetup-Layers-Data*) *CadSetup-Layers-Data* nil)
+        count 0)
+  (if allData
+    (foreach row allData
+      (setq lName (if (nth 0 row) (vl-princ-to-string (nth 0 row)) ""))
+      (if (wcmatch (strcase lName) "R-ANNO-*")
+        (progn
+          (setq lCol     (if (numberp (nth 1 row)) (nth 1 row) 7)
+                lPlotCol (if (nth 2 row) (vl-princ-to-string (nth 2 row)) "")
+                lType    (if (nth 3 row) (vl-princ-to-string (nth 3 row)) "CONTINUOUS")
+                lWt      (if (numberp (nth 4 row)) (nth 4 row) 25)
+                lPlot    (nth 5 row)
+                lHatch   (if (nth 6 row) (vl-princ-to-string (nth 6 row)) "NONE")
+                lHScale  (if (numberp (nth 7 row)) (nth 7 row) 1.0)
+                lHRot    (if (numberp (nth 8 row)) (nth 8 row) 0.0)
+                lTrans   (if (numberp (nth 9 row)) (nth 9 row) 0)
+                lLocked  (nth 10 row)
+                lDesc    (if (nth 11 row) (vl-princ-to-string (nth 11 row)) ""))
+          (if (CadSetup:EnsureLayer lName lCol lPlotCol lType lWt lPlot 
+                                    lHatch lHScale lHRot lTrans lLocked lDesc)
+            (setq count (1+ count))
+          )
+        )
+      )
+    )
+  )
+  count
+)
+
+;; CadSetup:EnsureHardwareLayersLoaded - Creates standard hardware layers from Db_Layers.lsp if missing
+(defun CadSetup:EnsureHardwareLayersLoaded ( / allData count row lName lCol lPlotCol lType lWt lPlot lHatch lHScale lHRot lTrans lLocked lDesc )
+  (setq allData (if (boundp '*CadSetup-Layers-Data*) *CadSetup-Layers-Data* nil)
+        count 0)
+  (if allData
+    (foreach row allData
+      (setq lName (if (nth 0 row) (vl-princ-to-string (nth 0 row)) ""))
+      (if (wcmatch (strcase lName) "R-HARD-*")
+        (progn
+          (setq lCol     (if (numberp (nth 1 row)) (nth 1 row) 7)
+                lPlotCol (if (nth 2 row) (vl-princ-to-string (nth 2 row)) "")
+                lType    (if (nth 3 row) (vl-princ-to-string (nth 3 row)) "CONTINUOUS")
+                lWt      (if (numberp (nth 4 row)) (nth 4 row) 25)
+                lPlot    (nth 5 row)
+                lHatch   (if (nth 6 row) (vl-princ-to-string (nth 6 row)) "NONE")
+                lHScale  (if (numberp (nth 7 row)) (nth 7 row) 1.0)
+                lHRot    (if (numberp (nth 8 row)) (nth 8 row) 0.0)
+                lTrans   (if (numberp (nth 9 row)) (nth 9 row) 0)
+                lLocked  (nth 10 row)
+                lDesc    (if (nth 11 row) (vl-princ-to-string (nth 11 row)) ""))
+          (if (CadSetup:EnsureLayer lName lCol lPlotCol lType lWt lPlot 
+                                    lHatch lHScale lHRot lTrans lLocked lDesc)
+            (setq count (1+ count))
+          )
+        )
+      )
+    )
+  )
+  count
+)
+
 ;; CadSetup:DrawPolyline - Sets current layer and launches native Polyline command
 (defun CadSetup:DrawPolyline (layName)
   (CadSetup:SetCurrentLayerSafe layName)
@@ -1601,6 +1667,10 @@
              (CadSetup:EnsureLineLayersLoaded))
             ((wcmatch (strcase filterPattern) "*MAT*")
              (CadSetup:EnsureMaterialLayersLoaded))
+            ((wcmatch (strcase filterPattern) "*ANNO*")
+             (CadSetup:EnsureAnnotationLayersLoaded))
+            ((wcmatch (strcase filterPattern) "*HARD*")
+             (CadSetup:EnsureHardwareLayersLoaded))
             (t
              (if (boundp 'CadSetup:LoadAllLayers) (CadSetup:LoadAllLayers)))
           )
@@ -1800,6 +1870,12 @@
          (mode_tile "btn_draw_rec" 0)
          (mode_tile "btn_draw_rec" 2) ; Set focus
         )
+        ((or (= toolStr "NONE") (= toolStr "CURRENT") (= toolStr ":CURRENT"))
+         (mode_tile "btn_draw_pl" 1)
+         (mode_tile "btn_draw_rec" 1)
+         (mode_tile "btn_current" 0)
+         (mode_tile "btn_current" 2) ; Set focus
+        )
         (t
          ;; defaultTool is nil - both drawing buttons active
          (mode_tile "btn_draw_pl" 0)
@@ -1818,6 +1894,8 @@
          (updateDetails selLayer)
          (if (= $reason 4)
            (cond
+             ((or (= toolStr \"NONE\") (= toolStr \"CURRENT\") (= toolStr \":CURRENT\"))
+              (done_dialog 3))
              ((or (= toolStr \"REC\") (= toolStr \"RECTANGLE\") (= toolStr \":TOOL-REC\"))
               (done_dialog 2))
              (t
@@ -1979,6 +2057,12 @@
         ((= act 3)
          (CadSetup:SetCurrentLayerSafe selLayer)
          (setq *WF-LAYER-RL* selLayer)
+         (if (wcmatch (strcase selLayer) "R-ANNO-*")
+           (setq *WF-LAYER-AD* selLayer)
+         )
+         (if (wcmatch (strcase selLayer) "R-HARD-*")
+           (setq *WF-LAYER-HD* selLayer)
+         )
          (princ (strcat "\n[UDLS] Current layer set to: " selLayer))
          (list :current selLayer)
         )
@@ -1995,6 +2079,14 @@
 
 (defun CadSetup:MaterialSelectorDialog (matLayers)
   (CadSetup:OpenLayerSelector "R-MAT-*" "Material Selection && Property Inspector" "REC" T)
+)
+
+(defun CadSetup:AnnotationSelectorDialog (annoLayers)
+  (CadSetup:OpenLayerSelector "R-ANNO-*" "Annotation & Dim Layer Selection && Property Inspector" ":CURRENT" nil)
+)
+
+(defun CadSetup:HardwareSelectorDialog (hardLayers)
+  (CadSetup:OpenLayerSelector "R-HARD-*" "Hardware & Fittings Layer Selection && Property Inspector" ":CURRENT" nil)
 )
 
 (defun CadSetup:RLayerSelectorDialog (rLayers)
@@ -2102,6 +2194,108 @@
 )
 
 (defun c:5 () (c:ML))
+
+
+;; c:AD - Annotation & Dim Suite / Layer Selection Entry Point
+(defun c:AD ( / annoLayers promptStr kwStr kwMap suffix kw opt chosenLayer dbRow desc )
+  (setq annoLayers (CadSetup:GetDrawingLayersByPattern "R-ANNO-*"))
+
+  (if (null annoLayers)
+    (CadSetup:OpenLayerSelector "R-ANNO-*" "Annotation & Dim Layer Selection && Property Inspector" ":CURRENT" nil)
+    (progn
+      ;; Build Command-Line Keywords and Prompt Map
+      (setq kwMap '(("DIALOG" . "DIALOG") ("D" . "DIALOG")))
+      (setq promptStr "\nSelect Annotation [Dialog")
+      (setq kwStr "Dialog D")
+
+      (foreach lay annoLayers
+        ;; Layer names format: "R-ANNO-DIMS" -> suffix "DIMS" (length 7 prefix "R-ANNO-")
+        (setq suffix (if (> (strlen lay) 7) (substr lay 8) lay))
+        (setq kw (strcase (vl-string-translate " " "_" suffix)))
+        (setq kwMap (cons (cons kw lay) kwMap))
+        (setq promptStr (strcat promptStr "/" suffix))
+        (setq kwStr (strcat kwStr " " kw))
+      )
+      (setq promptStr (strcat promptStr "] <Dialog>: "))
+
+      (initget kwStr)
+      (setq opt (getkword promptStr))
+
+      (if (or (null opt) (= (strcase opt) "DIALOG") (= (strcase opt) "D"))
+        (CadSetup:OpenLayerSelector "R-ANNO-*" "Annotation & Dim Layer Selection && Property Inspector" ":CURRENT" nil)
+        (progn
+          (setq chosenLayer (cdr (assoc (strcase (vl-string-translate " " "_" opt)) kwMap)))
+          (if chosenLayer
+            (progn
+              (CadSetup:SetCurrentLayerSafe chosenLayer)
+              (setq *WF-LAYER-AD* chosenLayer
+                    *WF-LAYER-RL* chosenLayer)
+              (setq dbRow (if (boundp 'CadSetup:GetLayerData) (CadSetup:GetLayerData chosenLayer) nil))
+              (setq desc (if (and dbRow (nth 11 dbRow)) (vl-princ-to-string (nth 11 dbRow)) ""))
+              (princ (strcat "\n[AD] Active layer set to: " chosenLayer
+                             (if (/= desc "") (strcat " (" desc ")") "")))
+            )
+            (princ (strcat "\n[AD] Unrecognized annotation layer: " opt))
+          )
+        )
+      )
+    )
+  )
+  (princ)
+)
+
+(defun c:6 () (c:AD))
+
+
+;; c:HD - Hardware & Fittings / Layer Selection Entry Point
+(defun c:HD ( / hardLayers promptStr kwStr kwMap suffix kw opt chosenLayer dbRow desc )
+  (setq hardLayers (CadSetup:GetDrawingLayersByPattern "R-HARD-*"))
+
+  (if (null hardLayers)
+    (CadSetup:OpenLayerSelector "R-HARD-*" "Hardware & Fittings Layer Selection && Property Inspector" ":CURRENT" nil)
+    (progn
+      ;; Build Command-Line Keywords and Prompt Map
+      (setq kwMap '(("DIALOG" . "DIALOG") ("D" . "DIALOG")))
+      (setq promptStr "\nSelect Hardware [Dialog")
+      (setq kwStr "Dialog D")
+
+      (foreach lay hardLayers
+        ;; Layer names format: "R-HARD-FITTINGS" -> suffix "FITTINGS" (length 7 prefix "R-HARD-")
+        (setq suffix (if (> (strlen lay) 7) (substr lay 8) lay))
+        (setq kw (strcase (vl-string-translate " " "_" suffix)))
+        (setq kwMap (cons (cons kw lay) kwMap))
+        (setq promptStr (strcat promptStr "/" suffix))
+        (setq kwStr (strcat kwStr " " kw))
+      )
+      (setq promptStr (strcat promptStr "] <Dialog>: "))
+
+      (initget kwStr)
+      (setq opt (getkword promptStr))
+
+      (if (or (null opt) (= (strcase opt) "DIALOG") (= (strcase opt) "D"))
+        (CadSetup:OpenLayerSelector "R-HARD-*" "Hardware & Fittings Layer Selection && Property Inspector" ":CURRENT" nil)
+        (progn
+          (setq chosenLayer (cdr (assoc (strcase (vl-string-translate " " "_" opt)) kwMap)))
+          (if chosenLayer
+            (progn
+              (CadSetup:SetCurrentLayerSafe chosenLayer)
+              (setq *WF-LAYER-HD* chosenLayer
+                    *WF-LAYER-RL* chosenLayer)
+              (setq dbRow (if (boundp 'CadSetup:GetLayerData) (CadSetup:GetLayerData chosenLayer) nil))
+              (setq desc (if (and dbRow (nth 11 dbRow)) (vl-princ-to-string (nth 11 dbRow)) ""))
+              (princ (strcat "\n[HD] Active layer set to: " chosenLayer
+                             (if (/= desc "") (strcat " (" desc ")") "")))
+            )
+            (princ (strcat "\n[HD] Unrecognized hardware layer: " opt))
+          )
+        )
+      )
+    )
+  )
+  (princ)
+)
+
+(defun c:7 () (c:HD))
 
 
 ;;; --------------------------------------------------------------------------
@@ -2574,6 +2768,6 @@
 
 
 (if *CadSetup-Debug*
-  (princ "\n[01_Workflow-Keys.lsp] Workflow keys (1=HL, 2=VP, 3=GL, 4=LL, 5=ML, `=R-) loaded.")
+  (princ "\n[01_Workflow-Keys.lsp] Workflow keys (1=HL, 2=VP, 3=GL, 4=LL, 5=ML, 6=AD, 7=HD, `=R-) loaded.")
 )
 (princ)

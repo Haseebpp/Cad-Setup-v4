@@ -57,9 +57,13 @@
 ;; ENVIRONMENT & CAPABILITY CHECKS
 ;; ===========================================================================
 
-;; AutoLISP compatibility utility for fboundp (function bound predicate)
+;; AutoLISP compatibility utility for symbolp and fboundp
+(defun symbolp (sym)
+  (= (type sym) 'SYM)
+)
+
 (defun fboundp (sym)
-  (and (symbolp sym)
+  (and (= (type sym) 'SYM)
        (boundp sym)
        (member (type (vl-symbol-value sym)) '(SUBR USUBR EXRXSUBR)))
 )

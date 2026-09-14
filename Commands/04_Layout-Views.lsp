@@ -91,7 +91,14 @@
 
   (setq startPt '(0.0 0.0 0.0))
 
-  (command "._-LAYER" "_M" "02-VIEW-PORT" "_C" "6" "" "")
+  (if (and (boundp 'CadSetup:EnsureLayer) CadSetup:EnsureLayer)
+    (CadSetup:EnsureLayer "R-ANNO-FRME" 6 "180,0,180" "CONTINUOUS" 50 T "NONE" 1.0 0.0 0 nil "Color 6 (Magenta): Annotation Frames - Drawing boundary frames, sheet borders, presentation framing")
+    (command "._-LAYER" "_M" "R-ANNO-FRME" "_C" "6" "" "_LW" "0.50" "" "")
+  )
+  (if (and (boundp 'CadSetup:SetCurrentLayerSafe) CadSetup:SetCurrentLayerSafe)
+    (CadSetup:SetCurrentLayerSafe "R-ANNO-FRME")
+    (setvar "CLAYER" "R-ANNO-FRME")
+  )
 
   (setq scaleList '(1 5 10 15 20 25 30 35 40 45 50))
   

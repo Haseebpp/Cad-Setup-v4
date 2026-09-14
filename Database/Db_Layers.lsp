@@ -11,12 +11,13 @@
 
   ;; Utilities
   ("01-HELP-LINE"       6   "180,0,180"   "CONTINUOUS"  5   nil  "NONE"      1.0  0.0  0   nil  "Color 6 (Magenta): Construction Lines - Auxiliary guides, temporary offsets, alignment rays (Non-Plotting)")
-  ("02-VIEW-PORT"       6   "180,0,180"   "CONTINUOUS"  5   nil  "NONE"      1.0  0.0  0   nil  "Color 6 (Magenta): Viewports - Layout viewport frames and detail sheet cutouts (Non-Plotting)")
+  ("02-VIEW-PORT"       250 "30,30,30"    "CENTERX2"    5   nil  "NONE"      1.0  0.0  0   nil  "Color 250 (Black): Viewports - Layout viewport frames and detail sheet cutouts (Non-Plotting)")
   ("03-GRID-LINE"       8   "100,100,100" "CONTINUOUS"  18  T    "NONE"      1.0  0.0  0   nil  "Color 8 (Dark Gray): Structural Grid - Primary building grid lines and column datums")
 
   ;; Annotations
   ("R-ANNO-DIMS"        20  "180,75,0"    "CONTINUOUS"  18  T    "NONE"      1.0  0.0  0   nil  "Color 20 (Orange/Tan): Dimensions - Primary and secondary dimension strings, overall gauges")
   ("R-ANNO-EQMT"        130 "0,120,130"   "CONTINUOUS"  25  T    "NONE"      1.0  0.0  0   nil  "Color 130 (Teal): Equipment Tags - Joinery & appliance equipment tags, hardware codes")
+  ("R-ANNO-FRME"        6   "180,0,180"   "CONTINUOUS"  50  T    "NONE"      1.0  0.0  0   nil  "Color 6 (Magenta): Annotation Frames - Drawing boundary frames, sheet borders, presentation framing")
   ("R-ANNO-LEDR"        252 "80,80,80"    "CONTINUOUS"  15  T    "NONE"      1.0  0.0  0   nil  "Color 252 (Pale Gray): Leaders - Multileader lines, pointers, item balloon callout lines")
   ("R-ANNO-NOTE"        3   "0,120,50"    "CONTINUOUS"  25  T    "NONE"      1.0  0.0  0   nil  "Color 3 (Green): General Notes - General notes, legends, drawing schedules")
   ("R-ANNO-REVN"        10  "200,30,0"    "CONTINUOUS"  35  T    "NONE"      1.0  0.0  0   nil  "Color 10 (Red-Orange): Revision Cloud - Revision clouds, delta revision tags, drawing change marks")

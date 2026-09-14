@@ -160,11 +160,27 @@
 ;;; 2. VIEWPORT BOUNDARY & METADATA TAGGER (2 / VP)
 ;;; --------------------------------------------------------------------------
 (defun c:VP ( / *error* oldLayer oldEcho lastEnt newEnt bbox
-                p1 p2 w h sc th offsetIn insInX insInY offsetOut insOutX insOutY
+                oldDimScale oldDimClrd oldDimClre oldDimClrt oldDimBlk
+                oldDimAsz oldDimTad oldDimTxt oldDimDec oldDimZin oldDimTxSty
+                p1 p2 w h sc th offsetIn insInX insInY
                 vpName cdate dotPos dPart tPart dtStr areaStr ratioStr scVal refScStr
-                midPt lay )
+                midPt lay dimLay dimOff ptTop1 ptTop2 ptTopDim ptRt1 ptRt2 ptRtDim )
 
   (setq lay (if *WF-LAYER-VP* *WF-LAYER-VP* "02-VIEW-PORT"))
+
+  (setq oldEcho     (getvar "CMDECHO")
+        oldLayer    (getvar "CLAYER")
+        oldDimScale (getvar "DIMSCALE")
+        oldDimClrd  (getvar "DIMCLRD")
+        oldDimClre  (getvar "DIMCLRE")
+        oldDimClrt  (getvar "DIMCLRT")
+        oldDimBlk   (getvar "DIMBLK")
+        oldDimAsz   (getvar "DIMASZ")
+        oldDimTad   (getvar "DIMTAD")
+        oldDimTxt   (getvar "DIMTXT")
+        oldDimDec   (getvar "DIMDEC")
+        oldDimZin   (getvar "DIMZIN")
+        oldDimTxSty (getvar "DIMTXSTY"))
 
   (defun *error* (msg)
     (if oldEcho (setvar "CMDECHO" oldEcho))
@@ -174,14 +190,25 @@
         (princ (strcat "\n[VP] Restored layer: " oldLayer))
       )
     )
+    (if oldDimScale (setvar "DIMSCALE" oldDimScale))
+    (if oldDimClrd  (setvar "DIMCLRD"  oldDimClrd))
+    (if oldDimClre  (setvar "DIMCLRE"  oldDimClre))
+    (if oldDimClrt  (setvar "DIMCLRT"  oldDimClrt))
+    (if oldDimBlk
+      (if (= oldDimBlk "") (setvar "DIMBLK" ".") (setvar "DIMBLK" oldDimBlk))
+    )
+    (if oldDimAsz   (setvar "DIMASZ"   oldDimAsz))
+    (if oldDimTad   (setvar "DIMTAD"   oldDimTad))
+    (if oldDimTxt   (setvar "DIMTXT"   oldDimTxt))
+    (if oldDimDec   (setvar "DIMDEC"   oldDimDec))
+    (if oldDimZin   (setvar "DIMZIN"   oldDimZin))
+    (if oldDimTxSty (setvar "DIMTXSTY" oldDimTxSty))
     (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
       (princ (strcat "\n[VP] Error: " msg))
     )
     (princ)
   )
 
-  (setq oldEcho  (getvar "CMDECHO")
-        oldLayer (getvar "CLAYER"))
   (setvar "CMDECHO" 0)
 
   (CadSetup:SetCurrentLayerSafe lay)
@@ -245,7 +272,7 @@
               (if (< scVal 1) (setq scVal 1))
               (setq refScStr (itoa scVal))
 
-              ;; 4. Inside Block Tag
+              ;; 4. Inside Block Tag (Consolidated Bottom-Left, Vibrant Pro Multi-Color Palette)
               (setq offsetIn (* th 1.2)
                     insInX   (+ (car p1) offsetIn)
                     insInY   (+ (cadr p1) offsetIn))
@@ -258,33 +285,65 @@
                   (cons 8 lay)
                   (list 10 insInX insInY 0.0)
                   (cons 40 th)
-                  '(71 . 7)
-                  (cons 1 (strcat "{\\fArial|b1;\\H1.5x;" vpName "}\\P"
-                                  "{\\fArial|b0;\\H0.8x;DIM: " (rtos w 2 0) " \\U+00D7 " (rtos h 2 0) " mm}"))
+                  '(71 . 7) ;; Bottom Left attachment
+                  (cons 1 (strcat "{\\fArial|b1;\\H1.4x;\\C4;" vpName "}\\P"
+                                  "{\\fArial|b0;\\H0.85x;\\C8;SIZE: \\C2;" (rtos w 2 0) " \\U+00D7 " (rtos h 2 0) " mm}\\P"
+                                  "{\\fArial|b0;\\H0.85x;\\C8;REF SCALE: \\C3;~1:" refScStr "}\\P"
+                                  "{\\fArial|b0;\\H0.85x;\\C8;AREA: \\C3;" areaStr " m\\U+00B2   \\C8;|   \\C8;RATIO: \\C3;" ratioStr ":1}\\P"
+                                  "{\\fArial|b0;\\H0.75x;\\C8;DATE: \\C9;" dtStr "}"))
                 )
               )
 
-              ;; 5. Outside Footer Strip
-              (setq offsetOut (* th 0.75)
-                    insOutX   (car p1)
-                    insOutY   (- (cadr p1) offsetOut))
+              ;; 5. Outside Automatic Dimensions (Top & Right edges on R-ANNO-DIMS in Yellow)
+              (setq dimLay (if *WF-LAYER-DIMS* *WF-LAYER-DIMS* "R-ANNO-DIMS"))
+              (CadSetup:SetCurrentLayerSafe dimLay)
 
-              (entmake
-                (list
-                  '(0 . "MTEXT")
-                  '(100 . "AcDbEntity")
-                  '(100 . "AcDbMText")
-                  (cons 8 lay)
-                  (list 10 insOutX insOutY 0.0)
-                  (cons 40 th)
-                  '(71 . 1)
-                  (cons 1 (strcat "{\\fArial|b0;\\H0.7x;"
-                                  "REF SCALE: ~1:" refScStr
-                                  "   |   AREA: " areaStr " m\\U+00B2"
-                                  "   |   RATIO: " ratioStr ":1"
-                                  "   |   DATE: " dtStr "}"))
-                )
+              ;; Apply Viewport-Scaled Yellow Dimension System Variables
+              (setvar "DIMSCALE" sc)
+              (setvar "DIMCLRD"  2)             ;; Yellow dimension line
+              (setvar "DIMCLRE"  2)             ;; Yellow extension lines
+              (setvar "DIMCLRT"  2)             ;; Yellow dimension text
+              (setvar "DIMBLK"   "_ArchTick")   ;; Architectural tick
+              (setvar "DIMASZ"   1.5)           ;; Scaled tick size
+              (setvar "DIMTAD"   1)             ;; Text above line
+              (setvar "DIMTXT"   2.5)           ;; 2.5 mm plotted text height (scaled by DIMSCALE)
+              (setvar "DIMDEC"   0)             ;; Whole numbers (0 decimal places)
+              (setvar "DIMZIN"   8)             ;; Suppress trailing zeros
+              (if (tblsearch "style" "ARCH-TEXT")
+                (setvar "DIMTXSTY" "ARCH-TEXT")
               )
+
+              (setq dimOff (* sc 12.0))
+
+              ;; Top Dimension (Width)
+              (setq ptTop1   (list (car p1) (cadr p2) 0.0)
+                    ptTop2   (list (car p2) (cadr p2) 0.0)
+                    ptTopDim (list (* 0.5 (+ (car p1) (car p2))) (+ (cadr p2) dimOff) 0.0))
+              (command "._dimaligned" "_non" ptTop1 "_non" ptTop2 "_non" ptTopDim)
+
+              ;; Right Dimension (Height)
+              (setq ptRt1   (list (car p2) (cadr p1) 0.0)
+                    ptRt2   (list (car p2) (cadr p2) 0.0)
+                    ptRtDim (list (+ (car p2) dimOff) (* 0.5 (+ (cadr p1) (cadr p2))) 0.0))
+              (command "._dimaligned" "_non" ptRt1 "_non" ptRt2 "_non" ptRtDim)
+
+              ;; Restore original dimension variables
+              (if oldDimScale (setvar "DIMSCALE" oldDimScale))
+              (if oldDimClrd  (setvar "DIMCLRD"  oldDimClrd))
+              (if oldDimClre  (setvar "DIMCLRE"  oldDimClre))
+              (if oldDimClrt  (setvar "DIMCLRT"  oldDimClrt))
+              (if oldDimBlk
+                (if (= oldDimBlk "") (setvar "DIMBLK" ".") (setvar "DIMBLK" oldDimBlk))
+              )
+              (if oldDimAsz   (setvar "DIMASZ"   oldDimAsz))
+              (if oldDimTad   (setvar "DIMTAD"   oldDimTad))
+              (if oldDimTxt   (setvar "DIMTXT"   oldDimTxt))
+              (if oldDimDec   (setvar "DIMDEC"   oldDimDec))
+              (if oldDimZin   (setvar "DIMZIN"   oldDimZin))
+              (if oldDimTxSty (setvar "DIMTXSTY" oldDimTxSty))
+
+              ;; Restore viewport layer for center guide point
+              (CadSetup:SetCurrentLayerSafe lay)
 
               ;; 6. Drafting Center Guide Point using MidPoint helper
               (setq midPt (CadSetup:MidPoint p1 p2))
@@ -302,6 +361,21 @@
     )
   )
 
+  ;; Final restoration
+  (if oldDimScale (setvar "DIMSCALE" oldDimScale))
+  (if oldDimClrd  (setvar "DIMCLRD"  oldDimClrd))
+  (if oldDimClre  (setvar "DIMCLRE"  oldDimClre))
+  (if oldDimClrt  (setvar "DIMCLRT"  oldDimClrt))
+  (if oldDimBlk
+    (if (= oldDimBlk "") (setvar "DIMBLK" ".") (setvar "DIMBLK" oldDimBlk))
+  )
+  (if oldDimAsz   (setvar "DIMASZ"   oldDimAsz))
+  (if oldDimTad   (setvar "DIMTAD"   oldDimTad))
+  (if oldDimTxt   (setvar "DIMTXT"   oldDimTxt))
+  (if oldDimDec   (setvar "DIMDEC"   oldDimDec))
+  (if oldDimZin   (setvar "DIMZIN"   oldDimZin))
+  (if oldDimTxSty (setvar "DIMTXSTY" oldDimTxSty))
+
   (setvar "CLAYER" oldLayer)
   (setvar "CMDECHO" oldEcho)
 
@@ -317,9 +391,15 @@
 ;;; --------------------------------------------------------------------------
 
 ;; AutoLISP compatibility utility for fboundp (function bound predicate)
+(if (not (boundp 'symbolp))
+  (defun symbolp (sym)
+    (= (type sym) 'SYM)
+  )
+)
+
 (if (not (boundp 'fboundp))
   (defun fboundp (sym)
-    (and (symbolp sym)
+    (and (= (type sym) 'SYM)
          (boundp sym)
          (member (type (vl-symbol-value sym)) '(SUBR USUBR EXRXSUBR)))
   )

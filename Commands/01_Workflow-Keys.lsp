@@ -2315,7 +2315,7 @@
 
 
 ;;; --------------------------------------------------------------------------
-;;; 6. ALL R-LAYERS SELECTOR & GEOMETRY DRAWING (- / R- / RLAY)
+;;; 6. ALL R-LAYERS SELECTOR & GEOMETRY DRAWING (` / - / R- / RLAY)
 ;;; --------------------------------------------------------------------------
 
 ;; CadSetup:GetDrawingRLayers - Returns a sorted list of all active drawing layers matching "R-*"
@@ -2709,8 +2709,8 @@
   )
 )
 
-;; c:- Main Entry Point for Workflow Key '-'
-(defun c:- ( / rLayers ans promptStr kwStr kwMap suffix kw opt res chosenLayer loopPrompt )
+;; c:` Main Entry Point for Workflow Key '`' (R-Layers)
+(defun c:` ( / rLayers ans promptStr kwStr kwMap suffix kw opt res chosenLayer loopPrompt )
   ;; 1. Check for existing R-* layers in active drawing
   (setq rLayers (CadSetup:GetDrawingRLayers))
 
@@ -2824,12 +2824,13 @@
   (princ)
 )
 
-;; Command Aliases for Workflow Key '-'
-(defun c:R- () (c:-))
-(defun c:RLAY () (c:-))
+;; Command Aliases for Workflow Key '`'
+(defun c:-    () (c:`))
+(defun c:R-   () (c:`))
+(defun c:RLAY () (c:`))
 
 
 (if *CadSetup-Debug*
-  (princ "\n[01_Workflow-Keys.lsp] Workflow keys (1=HL, 2=VP, 3=GL, 4=LL, 5=ML, -=R-) loaded.")
+  (princ "\n[01_Workflow-Keys.lsp] Workflow keys (1=HL, 2=VP, 3=GL, 4=LL, 5=ML, `=R-) loaded.")
 )
 (princ)

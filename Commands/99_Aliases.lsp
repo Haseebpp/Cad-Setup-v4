@@ -182,7 +182,7 @@
 (defun c:LD  () (initcommandversion) (command "_.LAYDEL")      (princ)) ; LD  -> Force-purge layer and all nested entities
 
 ;;; --- BLOCKS & EXTERNAL REFERENCES -----------------------------------------
-(defun c:`   () (initcommandversion) (command "_.REFEDIT")     (princ)) ; `   -> In-place Block / XREF editor
+(defun c:RE  () (initcommandversion) (command "_.REFEDIT")     (princ)) ; RE  -> In-place Block / XREF editor
 (defun c:RC  () (initcommandversion) (command "_.REFCLOSE")    (princ)) ; RC  -> Save & Close in-place block reference
 (defun c:B   () (initcommandversion) (initdia) (command "_.BLOCK") (princ)) ; B   -> Open Block Definition creation dialog
 (defun c:I   () (initcommandversion) (command "_.INSERT") (princ)) ; I   -> Launch Modern Block Insertion palette
@@ -192,7 +192,7 @@
 (defun c:ZW  () (initcommandversion) (command "_.ZOOM" "_W")   (princ)) ; ZW  -> Zoom to user-defined rectangle Window
 (defun c:ZP  () (initcommandversion) (command "_.ZOOM" "_P")   (princ)) ; ZP  -> Zoom to Previous viewport state
 (defun c:ZS  () (initcommandversion) (command "_.ZOOM" "_O")   (princ)) ; ZS  -> Zoom to selected Object bounds
-(defun c:RE  () (initcommandversion) (command "_.REGEN")       (princ)) ; RE  -> Regenerate active viewport display cache
+(defun c:REG  () (initcommandversion) (command "_.REGEN")       (princ)) ; RE  -> Regenerate active viewport display cache
 (defun c:REA () (initcommandversion) (command "_.REGENALL")    (princ)) ; REA -> Regenerate all viewports and model tabs
 
 ;;; --- DIMENSIONING & ANNOTATION --------------------------------------------

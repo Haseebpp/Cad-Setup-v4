@@ -208,8 +208,8 @@ Located in [Core/01_Undo-Manager.lsp](file:///d:/HASEEB/Cad-Setup-v4/Core/01_Und
 | `CB` | `G` | Auto-block with timestamp name & UCS bottom-left base point |
 | `OB` | `OB` | Quick block creator with origin `(0,0,0)` base point |
 | `RB` | `RB` | Rotate block +90° in place around insertion point |
-| `RBH` | `RBH` | Mirror block horizontally in place around insertion point |
-| `RBV` | `RBV` | Mirror block vertically in place around insertion point |
+| `RBH` | `RBH`, `RH` | Mirror block horizontally in place around insertion point |
+| `RBV` | `RBV`, `RV` | Mirror block vertically in place around insertion point |
 
 ### Layout & Sheet Tools
 | Command | Alias | Description |

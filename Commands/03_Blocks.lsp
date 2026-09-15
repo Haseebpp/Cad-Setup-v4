@@ -213,7 +213,9 @@
 ;; Command Shortcuts
 (defun c:RB  () (_ExecTransform 'ROTATE))
 (defun c:RBH () (_ExecTransform 'FLIP_H))
+(defun c:RH  () (_ExecTransform 'FLIP_H))
 (defun c:RBV () (_ExecTransform 'FLIP_V))
+(defun c:RV  () (_ExecTransform 'FLIP_V))
 
 
 ;;; --------------------------------------------------------------------------
@@ -805,6 +807,6 @@
 
 
 (if *CadSetup-Debug*
-  (princ "\n[03_Blocks.lsp] Block creation, transform, and Visual Joinery Palette loaded (CB, OB, RB, RBH, RBV, BL, 8).")
+  (princ "\n[03_Blocks.lsp] Block creation, transform, and Visual Joinery Palette loaded (CB, OB, RB, RBH/RH, RBV/RV, BL, 8).")
 )
 (princ)

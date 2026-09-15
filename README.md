@@ -85,6 +85,7 @@ Upon startup, the system automatically initializes all 36 production layers, lin
 Single-digit drafting shortcuts mapped to top-row keys for rapid execution. Each key safely sets the destination standard layer, executes the drafting tool, and **restores the active working layer**:
 
 * `[1]` / `HL` : **Help Line** — Draws on `01-HELP-LINE` with live snap point nodes.
+* `[/]` / `THL` : **Toggle Help Line** — Instantly toggles visibility (ON/OFF) of `01-HELP-LINE` (switches active layer safely if hidden).
 * `[2]` / `VP` : **Viewport Boundary** — Draws on `02-VIEW-PORT` and stamps dynamic ISO A3 scale metadata MText.
 * `[3]` / `GL` : **Grid Line Maker** — Launches the parametric structural grid generator.
 * `[4]` / `LL` : **Line Layer** — DCL selector for `R-LINE-*` layers + polyline drawing.
@@ -200,7 +201,9 @@ Located in [Core/01_Undo-Manager.lsp](file:///d:/HASEEB/Cad-Setup-v4/Core/01_Und
 | `LOAD-LAYERS` | `RL`, `RELOAD-LAYERS` | Synchronizes 36 standardized production layers from database |
 | `LOAD-DEFAULT-CURRENT-LAYERS` | `DCL` | Safely applies default drawing, dim, and hatch layers |
 | `L0` | `L0` | Instantly resets current layer to standard `"0"` |
+| `TOGGLE-HELP-LINE` | `/`, `THL` | Instantly toggles visibility (ON/OFF) of `01-HELP-LINE` |
 | `BUILD-LAYER-LEGEND` | `BLL`, `LAYER-LEGEND`| Generates graphic layer schedule with color swatches in model space |
+
 
 ### Blocks & Transformations
 | Command | Alias | Description |

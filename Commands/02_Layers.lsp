@@ -4,6 +4,7 @@
 ;;; Author   : Haseeb
 ;;; Commands : LOAD-LAYERS (RL, RELOAD-LAYERS),
 ;;;            LOAD-DEFAULT-CURRENT-LAYERS (DCL, DEFAULT-LAYERS), L0,
+;;;            TOGGLE-HELP-LINE (THL, /),
 ;;;            BUILD-LAYER-LEGEND (BLL, LAYER-LEGEND)
 ;;; ==========================================================================
 
@@ -218,6 +219,92 @@
   (princ "\n[L0] Current Layer is now: \"0\"")
   (princ)
 )
+
+;; TOGGLE-HELP-LINE / THL / /
+;; Rapidly toggles visibility (ON/OFF) of the "01-HELP-LINE" layer.
+;; - If layer is missing from the drawing, creates it standardly from database and sets it ON.
+;; - If layer is currently CLAYER when turning OFF, automatically switches CLAYER to default layer.
+(defun c:TOGGLE-HELP-LINE ( / *error* acadApp doc layObj curLay defLay isCur layName wasMissing )
+  (setq layName "01-HELP-LINE")
+  (defun *error* (msg)
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
+      (princ (strcat "\n[/] Error: " msg))
+    )
+    (princ)
+  )
+
+  (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
+
+  ;; 1. Check if layer exists in drawing, or create from DB
+  (setq wasMissing (not (tblsearch "LAYER" layName)))
+  (if wasMissing
+    (if (boundp 'CadSetup:EnsureLayerFromDb)
+      (CadSetup:EnsureLayerFromDb layName)
+    )
+  )
+
+  (setq acadApp (vlax-get-acad-object))
+  (if acadApp (setq doc (vla-get-activedocument acadApp)))
+
+  (if (and doc (tblsearch "LAYER" layName))
+    (progn
+      (setq layObj (vl-catch-all-apply 'vla-item (list (vla-get-layers doc) layName)))
+      (if (and (not (vl-catch-all-error-p layObj)) (= (type layObj) 'VLA-OBJECT))
+        (progn
+          (setq curLay (getvar "CLAYER")
+                isCur  (= (strcase curLay) (strcase layName)))
+          (cond
+            ;; Case A: Layer was just freshly created because it didn't exist -> ensure ON
+            (wasMissing
+             (vla-put-layeron layObj :vlax-true)
+             (if (= (vla-get-freeze layObj) :vlax-true) (vla-put-freeze layObj :vlax-false))
+             (princ "\n[/] 01-HELP-LINE: ON")
+            )
+            ;; Case B: Layer is currently ON -> turn it OFF
+            ((= (vla-get-layeron layObj) :vlax-true)
+             (if isCur
+               (progn
+                 (setq defLay (if (and *DEFAULT-CLAYER*
+                                       (= (type *DEFAULT-CLAYER*) 'STR)
+                                       (> (strlen *DEFAULT-CLAYER*) 0)
+                                       (tblsearch "LAYER" *DEFAULT-CLAYER*))
+                                *DEFAULT-CLAYER*
+                                "0"))
+                 (if (boundp 'CadSetup:SetCurrentLayerSafe)
+                   (CadSetup:SetCurrentLayerSafe defLay)
+                   (setvar "CLAYER" defLay)
+                 )
+                 (vla-put-layeron layObj :vlax-false)
+                 (princ (strcat "\n[/] 01-HELP-LINE: OFF (CLAYER switched to \"" defLay "\")"))
+               )
+               (progn
+                 (vla-put-layeron layObj :vlax-false)
+                 (princ "\n[/] 01-HELP-LINE: OFF")
+               )
+             )
+            )
+            ;; Case C: Layer is currently OFF -> turn it ON
+            (t
+             (vla-put-layeron layObj :vlax-true)
+             (if (= (vla-get-freeze layObj) :vlax-true) (vla-put-freeze layObj :vlax-false))
+             (princ "\n[/] 01-HELP-LINE: ON")
+            )
+          )
+        )
+        (princ "\n[/] Error: Unable to access 01-HELP-LINE layer object.")
+      )
+    )
+    (princ "\n[/] Error: 01-HELP-LINE layer not available.")
+  )
+
+  (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+  (princ)
+)
+
+(defun c:THL () (c:TOGGLE-HELP-LINE))
+(defun c:/ () (c:TOGGLE-HELP-LINE))
+
 
 ;;; --------------------------------------------------------------------------
 ;;; 5. VISUAL SPECIFICATION & MATERIAL LAYER LEGEND GENERATOR
@@ -610,7 +697,7 @@
 (defun c:LAYER-LEGEND () (c:BUILD-LAYER-LEGEND))
 
 (if *CadSetup-Debug*
-  (princ "\n[02_Layers.lsp] Production layer management and shortcuts loaded (RL, DCL, L0, BLL).")
+  (princ "\n[02_Layers.lsp] Production layer management and shortcuts loaded (RL, DCL, L0, THL, /, BLL).")
 )
 (princ)
 

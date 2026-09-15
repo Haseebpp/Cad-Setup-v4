@@ -344,6 +344,9 @@
 (defun c:QS  () (initcommandversion) (command "_.QSAVE")       (princ)) ; QS  -> Quick Save current drawing without prompt
 (defun c:CL  () (initcommandversion) (command "_.CLOSE")       (princ)) ; CL  -> Close current active drawing window
 
+;;; --- LAYER & VISIBILITY TOGGLES --------------------------------------------
+(defun c:/   () (c:TOGGLE-HELP-LINE)) ; /   -> Toggle 01-HELP-LINE layer ON/OFF
+
 ;;; ==========================================================================
 ;;; FUTURE DRAFTING ALIASES TEMPLATE (USER-EXTENSIBLE)
 ;;; ==========================================================================

@@ -255,9 +255,14 @@
     (progn
       (setq arr (vlax-safearray-fill (vlax-make-safearray vlax-vbObject '(0 . 0)) (list poly)))
 
-      ;; Ensure target layer exists and is unlocked
+      ;; Ensure target layer exists and is unlocked via database
+      (if (and targetLay (not (tblsearch "LAYER" targetLay)))
+        (if (boundp 'CadSetup:EnsureLayerFromDb)
+          (CadSetup:EnsureLayerFromDb targetLay)
+        )
+      )
       (if (not (tblsearch "LAYER" targetLay))
-        (vl-catch-all-apply 'vla-Add (list (vla-get-Layers acadDoc) targetLay))
+        (setq targetLay "0")
       )
       (CadSetup:EnsureLayerUnlocked targetLay)
 

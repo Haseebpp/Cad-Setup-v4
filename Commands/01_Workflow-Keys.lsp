@@ -617,11 +617,11 @@
         oldLayer (getvar "CLAYER"))
   (setvar "CMDECHO" 0)
 
-  ;; Ensure production layers
-  (if (and (boundp 'CadSetup:EnsureLayer) CadSetup:EnsureLayer)
+  ;; Ensure production layers from database
+  (if (boundp 'CadSetup:EnsureLayerFromDb)
     (progn
-      (CadSetup:EnsureLayer "03-GRID-LINE" 8 "100,100,100" "CONTINUOUS" 18 T "NONE" 1.0 0.0 0 nil "Structural Grid Lines")
-      (CadSetup:EnsureLayer "R-ANNO-SYMB"  2 "170,115,0"   "CONTINUOUS" 25 T "NONE" 1.0 0.0 0 nil "Grid Bubbles & Markers")
+      (CadSetup:EnsureLayerFromDb "03-GRID-LINE")
+      (CadSetup:EnsureLayerFromDb "R-ANNO-SYMB")
     )
   )
 
@@ -788,12 +788,12 @@
   (setq rotAngle (getangle insPt "\n[GL] Specify Grid Rotation Angle <0.0>: "))
   (if (null rotAngle) (setq rotAngle 0.0))
 
-  ;; Ensure Layers
-  (if (and (boundp 'CadSetup:EnsureLayer) CadSetup:EnsureLayer)
+  ;; Ensure Layers from database
+  (if (boundp 'CadSetup:EnsureLayerFromDb)
     (progn
-      (CadSetup:EnsureLayer "03-GRID-LINE" 8  "100,100,100" "CONTINUOUS" 18 T "NONE" 1.0 0.0 0 nil "Structural Grid Lines")
-      (CadSetup:EnsureLayer "R-ANNO-SYMB"  2  "170,115,0"   "CONTINUOUS" 25 T "NONE" 1.0 0.0 0 nil "Grid Bubbles & Markers")
-      (CadSetup:EnsureLayer "R-ANNO-DIMS"  20 "180,75,0"    "CONTINUOUS" 18 T "NONE" 1.0 0.0 0 nil "Grid Dimensions")
+      (CadSetup:EnsureLayerFromDb "03-GRID-LINE")
+      (CadSetup:EnsureLayerFromDb "R-ANNO-SYMB")
+      (CadSetup:EnsureLayerFromDb "R-ANNO-DIMS")
     )
   )
 
@@ -1401,30 +1401,16 @@
   (CadSetup:GetDrawingLayersByPattern "R-*")
 )
 
-;; CadSetup:EnsureLineLayersLoaded - Creates standard line layers from Db_Layers.lsp if missing
-(defun CadSetup:EnsureLineLayersLoaded ( / allData count row lName lCol lPlotCol lType lWt lPlot lHatch lHScale lHRot lTrans lLocked lDesc )
+;; CadSetup:EnsureLineLayersLoaded - Ensures standard line layers from Db_Layers.lsp if missing
+(defun CadSetup:EnsureLineLayersLoaded ( / allData count row lName )
   (setq allData (if (boundp '*CadSetup-Layers-Data*) *CadSetup-Layers-Data* nil)
         count 0)
   (if allData
     (foreach row allData
       (setq lName (if (nth 0 row) (vl-princ-to-string (nth 0 row)) ""))
       (if (wcmatch (strcase lName) "R-LINE-*")
-        (progn
-          (setq lCol     (if (numberp (nth 1 row)) (nth 1 row) 7)
-                lPlotCol (if (nth 2 row) (vl-princ-to-string (nth 2 row)) "")
-                lType    (if (nth 3 row) (vl-princ-to-string (nth 3 row)) "CONTINUOUS")
-                lWt      (if (numberp (nth 4 row)) (nth 4 row) 25)
-                lPlot    (nth 5 row)
-                lHatch   (if (nth 6 row) (vl-princ-to-string (nth 6 row)) "NONE")
-                lHScale  (if (numberp (nth 7 row)) (nth 7 row) 1.0)
-                lHRot    (if (numberp (nth 8 row)) (nth 8 row) 0.0)
-                lTrans   (if (numberp (nth 9 row)) (nth 9 row) 0)
-                lLocked  (nth 10 row)
-                lDesc    (if (nth 11 row) (vl-princ-to-string (nth 11 row)) ""))
-          (if (CadSetup:EnsureLayer lName lCol lPlotCol lType lWt lPlot 
-                                    lHatch lHScale lHRot lTrans lLocked lDesc)
-            (setq count (1+ count))
-          )
+        (if (CadSetup:EnsureLayerFromDb lName)
+          (setq count (1+ count))
         )
       )
     )
@@ -1432,30 +1418,16 @@
   count
 )
 
-;; CadSetup:EnsureMaterialLayersLoaded - Creates standard material layers from Db_Layers.lsp if missing
-(defun CadSetup:EnsureMaterialLayersLoaded ( / allData count row lName lCol lPlotCol lType lWt lPlot lHatch lHScale lHRot lTrans lLocked lDesc )
+;; CadSetup:EnsureMaterialLayersLoaded - Ensures standard material layers from Db_Layers.lsp if missing
+(defun CadSetup:EnsureMaterialLayersLoaded ( / allData count row lName )
   (setq allData (if (boundp '*CadSetup-Layers-Data*) *CadSetup-Layers-Data* nil)
         count 0)
   (if allData
     (foreach row allData
       (setq lName (if (nth 0 row) (vl-princ-to-string (nth 0 row)) ""))
       (if (wcmatch (strcase lName) "R-MAT-*")
-        (progn
-          (setq lCol     (if (numberp (nth 1 row)) (nth 1 row) 7)
-                lPlotCol (if (nth 2 row) (vl-princ-to-string (nth 2 row)) "")
-                lType    (if (nth 3 row) (vl-princ-to-string (nth 3 row)) "CONTINUOUS")
-                lWt      (if (numberp (nth 4 row)) (nth 4 row) 25)
-                lPlot    (nth 5 row)
-                lHatch   (if (nth 6 row) (vl-princ-to-string (nth 6 row)) "NONE")
-                lHScale  (if (numberp (nth 7 row)) (nth 7 row) 1.0)
-                lHRot    (if (numberp (nth 8 row)) (nth 8 row) 0.0)
-                lTrans   (if (numberp (nth 9 row)) (nth 9 row) 0)
-                lLocked  (nth 10 row)
-                lDesc    (if (nth 11 row) (vl-princ-to-string (nth 11 row)) ""))
-          (if (CadSetup:EnsureLayer lName lCol lPlotCol lType lWt lPlot 
-                                    lHatch lHScale lHRot lTrans lLocked lDesc)
-            (setq count (1+ count))
-          )
+        (if (CadSetup:EnsureLayerFromDb lName)
+          (setq count (1+ count))
         )
       )
     )
@@ -1463,30 +1435,16 @@
   count
 )
 
-;; CadSetup:EnsureAnnotationLayersLoaded - Creates standard annotation layers from Db_Layers.lsp if missing
-(defun CadSetup:EnsureAnnotationLayersLoaded ( / allData count row lName lCol lPlotCol lType lWt lPlot lHatch lHScale lHRot lTrans lLocked lDesc )
+;; CadSetup:EnsureAnnotationLayersLoaded - Ensures standard annotation layers from Db_Layers.lsp if missing
+(defun CadSetup:EnsureAnnotationLayersLoaded ( / allData count row lName )
   (setq allData (if (boundp '*CadSetup-Layers-Data*) *CadSetup-Layers-Data* nil)
         count 0)
   (if allData
     (foreach row allData
       (setq lName (if (nth 0 row) (vl-princ-to-string (nth 0 row)) ""))
       (if (wcmatch (strcase lName) "R-ANNO-*")
-        (progn
-          (setq lCol     (if (numberp (nth 1 row)) (nth 1 row) 7)
-                lPlotCol (if (nth 2 row) (vl-princ-to-string (nth 2 row)) "")
-                lType    (if (nth 3 row) (vl-princ-to-string (nth 3 row)) "CONTINUOUS")
-                lWt      (if (numberp (nth 4 row)) (nth 4 row) 25)
-                lPlot    (nth 5 row)
-                lHatch   (if (nth 6 row) (vl-princ-to-string (nth 6 row)) "NONE")
-                lHScale  (if (numberp (nth 7 row)) (nth 7 row) 1.0)
-                lHRot    (if (numberp (nth 8 row)) (nth 8 row) 0.0)
-                lTrans   (if (numberp (nth 9 row)) (nth 9 row) 0)
-                lLocked  (nth 10 row)
-                lDesc    (if (nth 11 row) (vl-princ-to-string (nth 11 row)) ""))
-          (if (CadSetup:EnsureLayer lName lCol lPlotCol lType lWt lPlot 
-                                    lHatch lHScale lHRot lTrans lLocked lDesc)
-            (setq count (1+ count))
-          )
+        (if (CadSetup:EnsureLayerFromDb lName)
+          (setq count (1+ count))
         )
       )
     )
@@ -1494,30 +1452,16 @@
   count
 )
 
-;; CadSetup:EnsureHardwareLayersLoaded - Creates standard hardware layers from Db_Layers.lsp if missing
-(defun CadSetup:EnsureHardwareLayersLoaded ( / allData count row lName lCol lPlotCol lType lWt lPlot lHatch lHScale lHRot lTrans lLocked lDesc )
+;; CadSetup:EnsureHardwareLayersLoaded - Ensures standard hardware layers from Db_Layers.lsp if missing
+(defun CadSetup:EnsureHardwareLayersLoaded ( / allData count row lName )
   (setq allData (if (boundp '*CadSetup-Layers-Data*) *CadSetup-Layers-Data* nil)
         count 0)
   (if allData
     (foreach row allData
       (setq lName (if (nth 0 row) (vl-princ-to-string (nth 0 row)) ""))
       (if (wcmatch (strcase lName) "R-HARD-*")
-        (progn
-          (setq lCol     (if (numberp (nth 1 row)) (nth 1 row) 7)
-                lPlotCol (if (nth 2 row) (vl-princ-to-string (nth 2 row)) "")
-                lType    (if (nth 3 row) (vl-princ-to-string (nth 3 row)) "CONTINUOUS")
-                lWt      (if (numberp (nth 4 row)) (nth 4 row) 25)
-                lPlot    (nth 5 row)
-                lHatch   (if (nth 6 row) (vl-princ-to-string (nth 6 row)) "NONE")
-                lHScale  (if (numberp (nth 7 row)) (nth 7 row) 1.0)
-                lHRot    (if (numberp (nth 8 row)) (nth 8 row) 0.0)
-                lTrans   (if (numberp (nth 9 row)) (nth 9 row) 0)
-                lLocked  (nth 10 row)
-                lDesc    (if (nth 11 row) (vl-princ-to-string (nth 11 row)) ""))
-          (if (CadSetup:EnsureLayer lName lCol lPlotCol lType lWt lPlot 
-                                    lHatch lHScale lHRot lTrans lLocked lDesc)
-            (setq count (1+ count))
-          )
+        (if (CadSetup:EnsureLayerFromDb lName)
+          (setq count (1+ count))
         )
       )
     )

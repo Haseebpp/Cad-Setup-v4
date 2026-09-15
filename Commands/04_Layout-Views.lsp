@@ -91,9 +91,8 @@
 
   (setq startPt '(0.0 0.0 0.0))
 
-  (if (and (boundp 'CadSetup:EnsureLayer) CadSetup:EnsureLayer)
-    (CadSetup:EnsureLayer "R-ANNO-FRME" 6 "180,0,180" "CONTINUOUS" 50 T "NONE" 1.0 0.0 0 nil "Color 6 (Magenta): Annotation Frames - Drawing boundary frames, sheet borders, presentation framing")
-    (command "._-LAYER" "_M" "R-ANNO-FRME" "_C" "6" "" "_LW" "0.50" "" "")
+  (if (and (boundp 'CadSetup:EnsureLayerFromDb) CadSetup:EnsureLayerFromDb)
+    (CadSetup:EnsureLayerFromDb "R-ANNO-FRME")
   )
   (if (and (boundp 'CadSetup:SetCurrentLayerSafe) CadSetup:SetCurrentLayerSafe)
     (CadSetup:SetCurrentLayerSafe "R-ANNO-FRME")

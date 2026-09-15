@@ -114,38 +114,86 @@
 )
 
 ;; ===========================================================================
+;; DATABASE LAYER LOADER
+;; ===========================================================================
+
+;; CadSetup:EnsureLayerFromDb - Loads and ensures layer with specifications from Database/Db_Layers.lsp
+;; Returns T if layer exists or was successfully created from DB, nil otherwise.
+(defun CadSetup:EnsureLayerFromDb (layName / dbRow lName lCol lPlotCol lType lWt lPlot lHatch lHScale lHRot lTrans lLocked lDesc)
+  (if (and layName (= (type layName) 'STR) (> (strlen layName) 0))
+    (cond
+      ;; Already exists in drawing database
+      ((tblsearch "LAYER" layName)
+       T
+      )
+      ;; Look up in master Database/Db_Layers.lsp
+      ((setq dbRow (if (boundp 'CadSetup:GetLayerData)
+                     (CadSetup:GetLayerData layName)
+                     (if (boundp '*CadSetup-Layers-Data*)
+                       (assoc (strcase layName) (mapcar '(lambda (x) (cons (strcase (car x)) (cdr x))) *CadSetup-Layers-Data*))
+                       nil)))
+       (setq lName    (if (nth 0 dbRow) (vl-princ-to-string (nth 0 dbRow)) layName)
+             lCol     (if (numberp (nth 1 dbRow)) (nth 1 dbRow) 7)
+             lPlotCol (if (nth 2 dbRow) (vl-princ-to-string (nth 2 dbRow)) "")
+             lType    (if (nth 3 dbRow) (vl-princ-to-string (nth 3 dbRow)) "CONTINUOUS")
+             lWt      (if (numberp (nth 4 dbRow)) (nth 4 dbRow) 25)
+             lPlot    (nth 5 dbRow)
+             lHatch   (if (nth 6 dbRow) (vl-princ-to-string (nth 6 dbRow)) "NONE")
+             lHScale  (if (numberp (nth 7 dbRow)) (nth 7 dbRow) 1.0)
+             lHRot    (if (numberp (nth 8 dbRow)) (nth 8 dbRow) 0.0)
+             lTrans   (if (numberp (nth 9 dbRow)) (nth 9 dbRow) 0)
+             lLocked  (nth 10 dbRow)
+             lDesc    (if (nth 11 dbRow) (vl-princ-to-string (nth 11 dbRow)) ""))
+       (CadSetup:EnsureLayer lName lCol lPlotCol lType lWt lPlot lHatch lHScale lHRot lTrans lLocked lDesc)
+      )
+      ;; Layer is not defined in Database/Db_Layers.lsp -> Refuse blind creation and notify
+      (t
+       (princ (strcat "\n[Notice]: Layer \"" layName "\" not found in Database/Db_Layers.lsp. Refusing unstandardized layer creation."))
+       nil
+      )
+    )
+    nil
+  )
+)
+
+;; ===========================================================================
 ;; CURRENT LAYER SWITCHING
 ;; ===========================================================================
 
 ;; CadSetup:SetCurrentLayerSafe - Safely switches active layer (CLAYER)
-;; If the layer does not exist, it is created with default parameters.
+;; Ensures layer exists by loading from master database; falls back to layer "0" if missing.
 (defun CadSetup:SetCurrentLayerSafe (layName / acadApp doc layObj)
   (if (and layName (= (type layName) 'STR) (> (strlen layName) 0))
     (progn
-      ;; Ensure layer exists
+      ;; Ensure layer exists via Database lookup
       (if (not (tblsearch "LAYER" layName))
+        (CadSetup:EnsureLayerFromDb layName)
+      )
+      (if (tblsearch "LAYER" layName)
         (progn
+          ;; Ensure layer is thawed and unlocked before making current
           (setq acadApp (vlax-get-acad-object))
           (if acadApp (setq doc (vla-get-activedocument acadApp)))
-          (if doc (vla-add (vla-get-layers doc) layName))
-        )
-      )
-      ;; Ensure layer is thawed and unlocked before making current
-      (setq acadApp (vlax-get-acad-object))
-      (if acadApp (setq doc (vla-get-activedocument acadApp)))
-      (if doc
-        (progn
-          (setq layObj (vl-catch-all-apply 'vla-item (list (vla-get-layers doc) layName)))
-          (if (and (not (vl-catch-all-error-p layObj)) (= (type layObj) 'VLA-OBJECT))
+          (if doc
             (progn
-              (if (= (vla-get-freeze layObj) :vlax-true) (vla-put-freeze layObj :vlax-false))
-              (if (= (vla-get-lock layObj) :vlax-true)   (vla-put-lock layObj :vlax-false))
+              (setq layObj (vl-catch-all-apply 'vla-item (list (vla-get-layers doc) layName)))
+              (if (and (not (vl-catch-all-error-p layObj)) (= (type layObj) 'VLA-OBJECT))
+                (progn
+                  (if (= (vla-get-freeze layObj) :vlax-true) (vla-put-freeze layObj :vlax-false))
+                  (if (= (vla-get-lock layObj) :vlax-true)   (vla-put-lock layObj :vlax-false))
+                )
+              )
             )
           )
+          (setvar "CLAYER" layName)
+          T
+        )
+        (progn
+          (princ (strcat "\n[Notice]: Layer \"" layName "\" unavailable. Falling back CLAYER to \"0\"."))
+          (setvar "CLAYER" "0")
+          nil
         )
       )
-      (setvar "CLAYER" layName)
-      T
     )
     nil
   )

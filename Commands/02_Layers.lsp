@@ -276,7 +276,10 @@
                                      hBox)
   (setq tblLayer "03-GRID-LINE")
   (if (not (tblsearch "LAYER" tblLayer))
-    (CadSetup:EnsureLayer tblLayer 8 "100,100,100" "CONTINUOUS" 18 T "NONE" 1.0 0.0 0 nil "Structural Grid"))
+    (if (boundp 'CadSetup:EnsureLayerFromDb)
+      (CadSetup:EnsureLayerFromDb tblLayer)
+    )
+  )
 
   (setq dataList (CadSetup:GetAllLayers))
   (if (null dataList)

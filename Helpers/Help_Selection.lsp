@@ -95,6 +95,7 @@
   ;; Localized Error Handler & Variable Restoration
   (defun *error* (msg)
     (if oldCmd (setvar 'cmdecho oldCmd))
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
     (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
       (princ (strcat "\n[" cmd "] Error: " msg))
     )

@@ -59,47 +59,103 @@
 (defun c:VB  () (initcommandversion) (command "_.PASTEBLOCK") (princ)) ; VB  -> Paste clipboard as an anonymous block
 
 ;; Transform Multi-Action Macros (with null-selection guards and atomic undo)
-(defun c:ROR (/ ss) 
+(defun c:ROR (/ *error* ss) 
+  (defun *error* (msg)
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[ROR] Error: " msg))
+    )
+    (princ)
+  )
   (if (setq ss (ssget)) 
     (progn 
-      (CadSetup:UndoStart) 
+      (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
       (command "_.ROTATE" ss "" pause "_R") 
-      (CadSetup:UndoEnd))) 
-  (princ)) ; ROR -> Rotate by Reference angle
+      (while (> (getvar 'cmdactive) 0)
+        (command pause)
+      )
+      (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+    )
+  ) 
+  (princ)
+) ; ROR -> Rotate by Reference angle
 
-(defun c:SCR (/ ss) 
+(defun c:SCR (/ *error* ss) 
+  (defun *error* (msg)
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[SCR] Error: " msg))
+    )
+    (princ)
+  )
   (if (setq ss (ssget)) 
     (progn 
-      (CadSetup:UndoStart) 
+      (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
       (command "_.SCALE" ss "" pause "_R") 
-      (CadSetup:UndoEnd))) 
-  (princ)) ; SCR -> Scale by Reference length
+      (while (> (getvar 'cmdactive) 0)
+        (command pause)
+      )
+      (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+    )
+  ) 
+  (princ)
+) ; SCR -> Scale by Reference length
 
-(defun c:BF  (/ ss) 
+(defun c:BF (/ *error* ss) 
+  (defun *error* (msg)
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[BF] Error: " msg))
+    )
+    (princ)
+  )
   (if (setq ss (ssget)) 
     (progn 
-      (CadSetup:UndoStart) 
+      (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
       (command "_.DRAWORDER" ss "" "_F") 
-      (CadSetup:UndoEnd))) 
-  (princ)) ; BF  -> Draw Order: Bring to absolute Front
+      (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+    )
+  ) 
+  (princ)
+) ; BF  -> Draw Order: Bring to absolute Front
 
-(defun c:BB  (/ ss) 
+(defun c:BB (/ *error* ss) 
+  (defun *error* (msg)
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[BB] Error: " msg))
+    )
+    (princ)
+  )
   (if (setq ss (ssget)) 
     (progn 
-      (CadSetup:UndoStart) 
+      (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
       (command "_.DRAWORDER" ss "" "_B") 
-      (CadSetup:UndoEnd))) 
-  (princ)) ; BB  -> Draw Order: Send to absolute Back
+      (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+    )
+  ) 
+  (princ)
+) ; BB  -> Draw Order: Send to absolute Back
 
-(defun c:ME  (/ ss p1 p2)                                                                 ; ME  -> Mirror and erase source objects
+(defun c:ME (/ *error* ss p1 p2)                                                                 ; ME  -> Mirror and erase source objects
+  (defun *error* (msg)
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[ME] Error: " msg))
+    )
+    (princ)
+  )
   (if (and (setq ss (ssget)) 
            (setq p1 (getpoint "\nSpecify 1st point of mirror axis: ")) 
            (setq p2 (getpoint p1 "\nSpecify 2nd point of mirror axis: ")))
     (progn
-      (CadSetup:UndoStart)
+      (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
       (command "_.MIRROR" ss "" p1 p2 "_Y")
-      (CadSetup:UndoEnd))) 
-  (princ))
+      (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+    )
+  ) 
+  (princ)
+)
 
 ;;; --- MODIFY & CLEANUP -----------------------------------------------------
 (defun c:S   () (initcommandversion) (command "_.STRETCH")   (princ)) ; S   -> Stretch crossing-window selection
@@ -115,47 +171,125 @@
 (defun c:BR  () (initcommandversion) (command "_.BREAK")     (princ)) ; BR  -> Break entity between 2 pick points
 
 ;; Modern & Legacy Safe Break-At-Point
-(defun c:BR1 ()                                  ; BR1 -> Split curve at a single pick point
+(defun c:BR1 (/ *error*)                                  ; BR1 -> Split curve at a single pick point
+  (defun *error* (msg)
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[BR1] Error: " msg))
+    )
+    (princ)
+  )
+  (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
   (if (vl-cmdf "_.BREAKATPOINT") 
     (command "_.BREAKATPOINT") 
-    (progn (initcommandversion) (command "_.BREAKATPOINT"))) 
-  (princ))
+    (progn (initcommandversion) (command "_.BREAKATPOINT"))
+  )
+  (while (> (getvar 'cmdactive) 0)
+    (command pause)
+  )
+  (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+  (princ)
+)
 
 ;; Explicit Array Versions
 (defun c:AR1 () (initcommandversion 1) (command "_.ARRAY") (princ)) ; AR1 -> Force legacy non-associative array
 (defun c:AR2 () (initcommandversion 2) (command "_.ARRAY") (princ)) ; AR2 -> Force modern associative ribbon array
 
 ;; Instant Zero-Radius / Zero-Distance Corners (Fast persistent resets)
-(defun c:FF  () (setvar "FILLETRAD" 0.0) (command "_.FILLET")  (princ)) ; FF  -> Fillet with Radius 0 (Clean sharp join)
-(defun c:CC  () (setvar "CHAMFERA" 0.0) (setvar "CHAMFERB" 0.0) (command "_.CHAMFER") (princ)) ; CC  -> Chamfer with 0x0 Distances
+(defun c:FF ( / *error* )                                                               ; FF  -> Fillet with Radius 0 (Clean sharp join)
+  (defun *error* (msg)
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[FF] Error: " msg))
+    )
+    (princ)
+  )
+  (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
+  (setvar "FILLETRAD" 0.0)
+  (command "_.FILLET")
+  (while (> (getvar 'cmdactive) 0)
+    (command pause)
+  )
+  (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+  (princ)
+)
+
+(defun c:CC ( / *error* )                                                               ; CC  -> Chamfer with 0x0 Distances
+  (defun *error* (msg)
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[CC] Error: " msg))
+    )
+    (princ)
+  )
+  (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
+  (setvar "CHAMFERA" 0.0)
+  (setvar "CHAMFERB" 0.0)
+  (command "_.CHAMFER")
+  (while (> (getvar 'cmdactive) 0)
+    (command pause)
+  )
+  (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+  (princ)
+)
 (setq c:F0 c:FF  c:CH0 c:CC)
 
 ;; Robust Polyline Processing (with PEDITACCEPT handling & atomic undo)
-(defun c:JJ (/ ss)                                                                        ; JJ  -> Batch convert & join lines/arcs to 2D Polyline
+(defun c:JJ (/ *error* ss)                                                              ; JJ  -> Batch convert & join lines/arcs to 2D Polyline
+  (defun *error* (msg)
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[JJ] Error: " msg))
+    )
+    (princ)
+  )
   (if (setq ss (ssget '((0 . "LINE,ARC,*POLYLINE"))))
     (progn
-      (CadSetup:UndoStart)
+      (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
       (if (= (getvar "PEDITACCEPT") 1)
         (command "_.pedit" "_M" ss "" "_J" 0.0 "")
         (command "_.pedit" "_M" ss "" "_Y" "_J" 0.0 ""))
-      (CadSetup:UndoEnd)))
-  (princ))
+      (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+    )
+  )
+  (princ)
+)
 
-(defun c:PC (/ ss)                                                                        ; PC  -> Batch force Close polyline contours
+(defun c:PC (/ *error* ss)                                                              ; PC  -> Batch force Close polyline contours
+  (defun *error* (msg)
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[PC] Error: " msg))
+    )
+    (princ)
+  )
   (if (setq ss (ssget '((0 . "*POLYLINE"))))
     (progn
-      (CadSetup:UndoStart)
+      (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
       (command "_.pedit" "_M" ss "" "_C" "")
-      (CadSetup:UndoEnd)))
-  (princ))
+      (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+    )
+  )
+  (princ)
+)
 
-(defun c:PO (/ ss)                                                                        ; PO  -> Batch force Open polyline contours
+(defun c:PO (/ *error* ss)                                                              ; PO  -> Batch force Open polyline contours
+  (defun *error* (msg)
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[PO] Error: " msg))
+    )
+    (princ)
+  )
   (if (setq ss (ssget '((0 . "*POLYLINE"))))
     (progn
-      (CadSetup:UndoStart)
+      (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
       (command "_.pedit" "_M" ss "" "_O" "")
-      (CadSetup:UndoEnd)))
-  (princ))
+      (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+    )
+  )
+  (princ)
+)
 
 ;;; --- SELECTION & ISOLATION ------------------------------------------------
 (defun c:SS  () (initcommandversion) (command "_.SELECTSIMILAR")    (princ)) ; SS  -> Select all matching objects by type/layer

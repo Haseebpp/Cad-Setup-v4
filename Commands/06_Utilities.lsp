@@ -236,20 +236,40 @@
 ;;; --------------------------------------------------------------------------
 
 ;; FIXSELECT : Restore Noun/Verb, Additive Selection, and Highlights
-(defun c:FIXSELECT ()
+(defun c:FIXSELECT ( / *error* )
+  (defun *error* (msg)
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[FIXSELECT] Error: " msg))
+    )
+    (princ)
+  )
+
+  (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
   (CadSetup:SafeSetVar "PICKFIRST" 1)
   (CadSetup:SafeSetVar "PICKADD" 2)
   (CadSetup:SafeSetVar "PICKAUTO" 5)
   (CadSetup:SafeSetVar "HIGHLIGHT" 1)
+  (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
   (princ "\n[FIXSELECT] Selection environment restored (PICKFIRST=1, PICKADD=2, PICKAUTO=5, HIGHLIGHT=1).")
   (princ)
 )
 
 ;; FIXBOX : Restore File, Command & Attribute Dialog Boxes
-(defun c:FIXBOX ()
+(defun c:FIXBOX ( / *error* )
+  (defun *error* (msg)
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[FIXBOX] Error: " msg))
+    )
+    (princ)
+  )
+
+  (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
   (CadSetup:SafeSetVar "FILEDIA" 1)
   (CadSetup:SafeSetVar "CMDDIA" 1)
   (CadSetup:SafeSetVar "ATTDIA" 1)
+  (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
   (princ "\n[FIXBOX] Dialog boxes restored (FILEDIA=1, CMDDIA=1, ATTDIA=1).")
   (princ)
 )
@@ -260,10 +280,15 @@
 
   (defun *error* (msg)
     (if oldecho (setvar "CMDECHO" oldecho))
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[WF] Error: " msg))
+    )
     (princ)
   )
 
   (setvar "CMDECHO" 0)
+  (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
   (setq curVal (getvar "WIPEOUTFRAME"))
   (cond
     ((= curVal 0)
@@ -276,6 +301,7 @@
       (setvar "WIPEOUTFRAME" 0)
       (princ "\n[WF] WIPEOUTFRAME = 0 (Frames Hidden)"))
   )
+  (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
   (setvar "CMDECHO" oldecho)
   (princ)
 )

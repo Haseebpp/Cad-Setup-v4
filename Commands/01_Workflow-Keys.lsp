@@ -52,6 +52,7 @@
   (defun *error* (msg)
     (if oldEcho  (setvar "CMDECHO" oldEcho))
     (if oldLayer (setvar "CLAYER" oldLayer))
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
     (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
       (princ (strcat "\n[HL] Error: " msg))
     )
@@ -86,6 +87,8 @@
   (setq oldEcho  (getvar "CMDECHO")
         oldLayer (getvar "CLAYER"))
   (setvar "CMDECHO" 0)
+
+  (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
 
   ;; Safely set current layer using helper
   (CadSetup:SetCurrentLayerSafe lay)
@@ -152,6 +155,7 @@
   )
 
   (setvar "CLAYER" oldLayer)
+  (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
   (setvar "CMDECHO" oldEcho)
 
   (princ (strcat "\n[HL] Completed. Restored layer: " oldLayer))
@@ -208,6 +212,7 @@
     (if oldDimDec   (setvar "DIMDEC"   oldDimDec))
     (if oldDimZin   (setvar "DIMZIN"   oldDimZin))
     (if oldDimTxSty (setvar "DIMTXSTY" oldDimTxSty))
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
     (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
       (princ (strcat "\n[VP] Error: " msg))
     )
@@ -215,6 +220,7 @@
   )
 
   (setvar "CMDECHO" 0)
+  (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
 
   (CadSetup:SetCurrentLayerSafe lay)
 
@@ -382,6 +388,7 @@
   (if oldDimTxSty (setvar "DIMTXSTY" oldDimTxSty))
 
   (setvar "CLAYER" oldLayer)
+  (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
   (setvar "CMDECHO" oldEcho)
 
   (princ (strcat "\n[VP] Completed. Restored layer: " oldLayer))
@@ -599,7 +606,7 @@
   (defun *error* (msg)
     (if oldEcho (setvar "CMDECHO" oldEcho))
     (if oldLayer (setvar "CLAYER" oldLayer))
-    (CadSetup:UndoEnd)
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
     (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
       (princ (strcat "\n[GL-Single] Error: " msg))
     )
@@ -756,7 +763,7 @@
   (defun *error* (msg)
     (if oldEcho (setvar "CMDECHO" oldEcho))
     (if oldLayer (setvar "CLAYER" oldLayer))
-    (CadSetup:UndoEnd)
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
     (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
       (princ (strcat "\n[GL-Grid Error]: " msg))
     )
@@ -1518,14 +1525,30 @@
   count
 )
 
-;; CadSetup:DrawPolyline - Sets current layer and launches native Polyline command
-(defun CadSetup:DrawPolyline (layName)
+;; CadSetup:DrawPolyline - Sets current layer and launches native Polyline command with atomic undo
+(defun CadSetup:DrawPolyline (layName / *error* oldEcho)
+  (defun *error* (msg)
+    (if oldEcho (setvar "CMDECHO" oldEcho))
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
+      (princ (strcat "\n[PL] Error: " msg))
+    )
+    (princ)
+  )
+
+  (setq oldEcho (getvar "CMDECHO"))
+  (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
   (CadSetup:SetCurrentLayerSafe layName)
   (setq *WF-LAYER-LL* layName
         *WF-LAYER-RL* layName)
   (princ (strcat "\n[PL] Current layer set to: " layName))
   (setvar "CMDECHO" 1)
   (command "_.PLINE")
+  (while (> (getvar "CMDACTIVE") 0)
+    (command pause)
+  )
+  (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+  (setvar "CMDECHO" oldEcho)
   (princ)
 )
 
@@ -2198,7 +2221,15 @@
 
 
 ;; c:AD - Annotation & Dim Suite / Layer Selection Entry Point
-(defun c:AD ( / annoLayers promptStr kwStr kwMap suffix kw opt chosenLayer dbRow desc )
+(defun c:AD ( / *error* annoLayers promptStr kwStr kwMap suffix kw opt chosenLayer dbRow desc )
+  (defun *error* (msg)
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
+      (princ (strcat "\n[AD] Error: " msg))
+    )
+    (princ)
+  )
+
   (setq annoLayers (CadSetup:GetDrawingLayersByPattern "R-ANNO-*"))
 
   (if (null annoLayers)
@@ -2228,11 +2259,13 @@
           (setq chosenLayer (cdr (assoc (strcase (vl-string-translate " " "_" opt)) kwMap)))
           (if chosenLayer
             (progn
+              (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
               (CadSetup:SetCurrentLayerSafe chosenLayer)
               (setq *WF-LAYER-AD* chosenLayer
                     *WF-LAYER-RL* chosenLayer)
               (setq dbRow (if (boundp 'CadSetup:GetLayerData) (CadSetup:GetLayerData chosenLayer) nil))
               (setq desc (if (and dbRow (nth 11 dbRow)) (vl-princ-to-string (nth 11 dbRow)) ""))
+              (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
               (princ (strcat "\n[AD] Active layer set to: " chosenLayer
                              (if (/= desc "") (strcat " (" desc ")") "")))
             )
@@ -2249,7 +2282,15 @@
 
 
 ;; c:HD - Hardware & Fittings / Layer Selection Entry Point
-(defun c:HD ( / hardLayers promptStr kwStr kwMap suffix kw opt chosenLayer dbRow desc )
+(defun c:HD ( / *error* hardLayers promptStr kwStr kwMap suffix kw opt chosenLayer dbRow desc )
+  (defun *error* (msg)
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
+      (princ (strcat "\n[HD] Error: " msg))
+    )
+    (princ)
+  )
+
   (setq hardLayers (CadSetup:GetDrawingLayersByPattern "R-HARD-*"))
 
   (if (null hardLayers)
@@ -2279,11 +2320,13 @@
           (setq chosenLayer (cdr (assoc (strcase (vl-string-translate " " "_" opt)) kwMap)))
           (if chosenLayer
             (progn
+              (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
               (CadSetup:SetCurrentLayerSafe chosenLayer)
               (setq *WF-LAYER-HD* chosenLayer
                     *WF-LAYER-RL* chosenLayer)
               (setq dbRow (if (boundp 'CadSetup:GetLayerData) (CadSetup:GetLayerData chosenLayer) nil))
               (setq desc (if (and dbRow (nth 11 dbRow)) (vl-princ-to-string (nth 11 dbRow)) ""))
+              (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
               (princ (strcat "\n[HD] Active layer set to: " chosenLayer
                              (if (/= desc "") (strcat " (" desc ")") "")))
             )
@@ -2705,7 +2748,15 @@
 )
 
 ;; c:` Main Entry Point for Workflow Key '`' (R-Layers)
-(defun c:` ( / rLayers ans promptStr kwStr kwMap suffix kw opt res chosenLayer loopPrompt )
+(defun c:` ( / *error* rLayers ans promptStr kwStr kwMap suffix kw opt res chosenLayer loopPrompt )
+  (defun *error* (msg)
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
+      (princ (strcat "\n[-] Error: " msg))
+    )
+    (princ)
+  )
+
   ;; 1. Check for existing R-* layers in active drawing
   (setq rLayers (CadSetup:GetDrawingRLayers))
 

@@ -37,8 +37,18 @@
 (CadSetup:ApplySystemVariables)
 
 ;; Command to re-apply recommended system variables on demand
-(defun c:APPLY-SYSVARS ()
+(defun c:APPLY-SYSVARS ( / *error* count )
+  (defun *error* (msg)
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[APPLY-SYSVARS] Error: " msg))
+    )
+    (princ)
+  )
+
+  (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
   (setq count (CadSetup:ApplySystemVariables))
+  (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
   (princ (strcat "\n[APPLY-SYSVARS] Recommended system variables enforced (" (itoa count) " checked/updated)."))
   (princ)
 )

@@ -128,6 +128,214 @@
   (princ)
 )
 
+;;; --------------------------------------------------------------------------
+;;; 3. VPCLIP RECTANGLE DUPLICATOR (VPCLIPRECTANGLE / VR)
+;;; --------------------------------------------------------------------------
+
+;; Global Configuration: Target Viewport Layer
+(if (not (boundp '*VPCLIP-LAYER*))
+  (setq *VPCLIP-LAYER* "02-VIEW-PORT")
+)
+
+;; Helper: Resolves selection to the actual VIEWPORT entity
+;; Accepts both regular viewports and clipping boundaries (LWPOLYLINE, REGION, etc.)
+(defun CadSetup:GetViewportEntity (ent / ed ss i found vp)
+  (if (and ent (setq ed (entget ent)))
+    (cond
+      ;; Direct Viewport entity (exclude layout overall viewport cvport=1)
+      ((= (cdr (assoc 0 ed)) "VIEWPORT")
+       (if (and (assoc 69 ed) (> (cdr (assoc 69 ed)) 1))
+         ent
+         nil
+       )
+      )
+      ;; Boundary or other object: find parent viewport in current layout
+      (t
+       (setq ss (ssget "_X" (list '(0 . "VIEWPORT") (cons 410 (getvar 'ctab)))))
+       (if ss
+         (repeat (setq i (sslength ss))
+           (setq vp (ssname ss (setq i (1- i))))
+           (if (and (= (cdr (assoc 71 (entget vp))) 1)
+                    (equal (cdr (assoc 340 (entget vp))) ent))
+             (setq found vp)
+           )
+         )
+       )
+       found
+      )
+    )
+  )
+)
+
+;; VPCLIPRECTANGLE : Copy Viewport and Clip with User-Drawn Rectangle
+(defun c:VPCLIPRECTANGLE ( / *error* doc oldLayer oldCmdecho targetLayer
+                             ssPre vpList i ent sel vpEnt
+                             ssCopy preRect rect preCopy newVp e)
+
+  ;; Error handler: safely restores environment on cancel or error
+  (defun *error* (msg)
+    (if oldCmdecho (setvar 'cmdecho oldCmdecho))
+    (if oldLayer   (setvar 'clayer oldLayer))
+    (sssetfirst nil nil)
+    (if (boundp 'CadSetup:UndoReset)
+      (CadSetup:UndoReset)
+      (if doc (vla-endundomark doc))
+    )
+    (if (and msg (not (member msg '("Function cancelled" "quit / exit abort"))))
+      (princ (strcat "\n[VR] Error: " msg))
+    )
+    (princ)
+  )
+
+  ;; Ensure execution is in Paper Space (Layout mode)
+  (if (and (= (getvar 'tilemode) 0) (= (getvar 'cvport) 1))
+    (progn
+      (setq targetLayer (if *VPCLIP-LAYER* *VPCLIP-LAYER* "02-VIEW-PORT"))
+
+      ;; ---------------------------------------------------------
+      ;; CHECK PRE-SELECTION (PICKFIRST / IMPLIED SELECTION)
+      ;; ---------------------------------------------------------
+      (setq ssPre (ssget "_I"))
+      (if ssPre
+        (progn
+          (setq vpList nil)
+          (repeat (setq i (sslength ssPre))
+            (setq ent (ssname ssPre (setq i (1- i))))
+            (setq vpEnt (CadSetup:GetViewportEntity ent))
+            ;; Deduplicate if both boundary and viewport were selected
+            (if (and vpEnt (not (vl-position vpEnt vpList)))
+              (setq vpList (cons vpEnt vpList))
+            )
+          )
+          (sssetfirst nil nil) ; Clear active selection set
+
+          (cond
+            ;; Exactly one viewport found in pre-selection -> use it directly
+            ((= (length vpList) 1)
+             (setq vpEnt (car vpList))
+            )
+            ;; Multiple viewports found -> reset and prompt
+            ((> (length vpList) 1)
+             (setq vpEnt nil)
+             (princ "\n[VR] Multiple viewports selected. Please pick one.")
+            )
+            ;; Non-viewport objects selected -> reset and prompt
+            (t
+             (setq vpEnt nil)
+            )
+          )
+        )
+      )
+
+      ;; ---------------------------------------------------------
+      ;; INTERACTIVE PROMPT (If not pre-selected or multiple picked)
+      ;; ---------------------------------------------------------
+      (while (and (not vpEnt)
+                  (setq sel (entsel "\nSelect viewport or clipping boundary to copy & clip: ")))
+        (setq ent (car sel))
+        (setq vpEnt (CadSetup:GetViewportEntity ent))
+        (if (not vpEnt)
+          (princ "\n[VR] Selected object is not a valid viewport or clipping boundary. Try again.")
+        )
+      )
+
+      ;; ---------------------------------------------------------
+      ;; DRAW RECTANGLE & DUPLICATE/CLIP
+      ;; ---------------------------------------------------------
+      (if vpEnt
+        (progn
+          (setq doc (vla-get-activedocument (vlax-get-acad-object)))
+          (if (boundp 'CadSetup:UndoStart)
+            (CadSetup:UndoStart)
+            (vla-startundomark doc)
+          )
+
+          (setq oldCmdecho (getvar 'cmdecho))
+          (setvar 'cmdecho 0)
+          (setq oldLayer (getvar 'clayer))
+
+          ;; Ensure target layer exists in database and is thawed/unlocked
+          (if (and (boundp 'CadSetup:EnsureLayerFromDb) CadSetup:EnsureLayerFromDb)
+            (CadSetup:EnsureLayerFromDb targetLayer)
+          )
+          (if (and (boundp 'CadSetup:SetCurrentLayerSafe) CadSetup:SetCurrentLayerSafe)
+            (CadSetup:SetCurrentLayerSafe targetLayer)
+            (if (tblsearch "LAYER" targetLayer)
+              (command "_.layer" "_on" targetLayer "_thaw" targetLayer "_unlock" targetLayer "_set" targetLayer "")
+              (command "_.layer" "_make" targetLayer "")
+            )
+          )
+
+          ;; Draw clipping rectangle directly on the target layer
+          (setvar 'cmdecho 1)
+          (setq preRect (entlast))
+          (command "_.rectang")
+          (while (> (getvar 'cmdactive) 0) (command pause))
+          (setvar 'cmdecho 0)
+          (setq rect (entlast))
+
+          ;; Verify rectangle was drawn successfully
+          (if (and rect (not (equal rect preRect)))
+            (progn
+              ;; Copy ONLY the viewport entity itself.
+              ;; Omitting the old clipping boundary polyline prevents AutoCAD
+              ;; from cloning it and leaving a duplicate polyline behind.
+              (setq ssCopy (ssadd vpEnt))
+
+              (setq preCopy (entlast))
+              (command "_.copy" ssCopy "" "_non" '(0 0 0) "_non" '(0 0 0))
+              (while (> (getvar 'cmdactive) 0) (command ""))
+
+              ;; Identify the newly copied viewport
+              (setq newVp nil)
+              (setq e preCopy)
+              (while (setq e (entnext e))
+                (if (= (cdr (assoc 0 (entget e))) "VIEWPORT")
+                  (setq newVp e)
+                )
+              )
+
+              (if newVp
+                (progn
+                  ;; Assign viewport entity to the target layer and turn it on
+                  (command "_.chprop" newVp "" "_layer" targetLayer "")
+                  (command "_.mview" "_on" newVp "")
+
+                  ;; Apply new rectangle boundary to the new viewport
+                  (command "_.vpclip" newVp rect)
+                  (while (> (getvar 'cmdactive) 0) (command ""))
+
+                  (princ (strcat "\n[VR] Success: Viewport copied and clipped on layer \"" targetLayer "\"."))
+                )
+                (princ "\n[VR] Error: Failed to copy viewport.")
+              )
+            )
+            (princ "\n[VR] Rectangle cancelled. No changes made.")
+          )
+
+          ;; Revert to the original working layer and restore settings
+          (if (and (boundp 'CadSetup:SetCurrentLayerSafe) CadSetup:SetCurrentLayerSafe)
+            (CadSetup:SetCurrentLayerSafe oldLayer)
+            (setvar 'clayer oldLayer)
+          )
+          (setvar 'cmdecho oldCmdecho)
+          (if (boundp 'CadSetup:UndoEnd)
+            (CadSetup:UndoEnd)
+            (vla-endundomark doc)
+          )
+        )
+      )
+    )
+    (princ "\n[VR] Command must be used in Paper Space layout.")
+  )
+  (princ)
+)
+
+;; Alias: VR -> VPCLIPRECTANGLE
+(defun c:VR ()
+  (c:VPCLIPRECTANGLE)
+)
+
 (if *CadSetup-Debug*
   (princ "\n[04_Layout-Views.lsp] View navigation, dimensions, and layout tools loaded.")
 )

@@ -96,7 +96,7 @@ d:\HASEEB\Cad-Setup-v4\
 │   ├── 01_Workflow-Keys.lsp    ; Fast drafting key shortcuts (1=HL, 2=VP, 3=GL, 4=LL, 5=ML, 6=AD, 7=HD, 8=BL, `=R-)
 │   ├── 02_Layers.lsp           ; Layer management commands (RL, DCL, L0, BLL)
 │   ├── 03_Blocks.lsp           ; Block creation, transforms & visual palette (CB, OB, RB, RBH, RBV, BL, 8)
-│   ├── 04_Layout-Views.lsp     ; Viewport and presentation tools (TS, A3SERIES)
+│   ├── 04_Layout-Views.lsp     ; Viewport and presentation tools (TS, A3SERIES, VPCLIPRECTANGLE, VR)
 │   ├── 05_Selection-Filters.lsp; Fast selection isolators (SR, SL, SB, SH, SA, SW)
 │   ├── 06_Utilities.lsp        ; Geometry utilities & repair (TC, CIP, BBOX, CTRANS, FL0, PUA, WF, WR, LST)
 │   └── 99_Aliases.lsp          ; AutoCAD command alias mapping & atomic macros (ROR, SCR, BF, BB, ME, JJ, PC, PO, FF, CC, BR1)

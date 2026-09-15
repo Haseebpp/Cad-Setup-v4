@@ -328,6 +328,7 @@
 (defun c:ZS  () (initcommandversion) (command "_.ZOOM" "_O")   (princ)) ; ZS  -> Zoom to selected Object bounds
 (defun c:REG  () (initcommandversion) (command "_.REGEN")       (princ)) ; RE  -> Regenerate active viewport display cache
 (defun c:REA () (initcommandversion) (command "_.REGENALL")    (princ)) ; REA -> Regenerate all viewports and model tabs
+(defun c:VR  () (c:VPCLIPRECTANGLE))                                   ; VR  -> Copy Viewport & Clip with Rectangle (VPCLIPRECTANGLE)
 
 ;;; --- DIMENSIONING & ANNOTATION --------------------------------------------
 (defun c:DA  () (initcommandversion) (command "_.DIMALIGNED")  (princ)) ; DA  -> Aligned dimension (follows curve angle)

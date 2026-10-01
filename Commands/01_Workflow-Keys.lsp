@@ -5,22 +5,25 @@
 ;;; ==========================================================================
 ;;;
 ;;; SUMMARY:
-;;;   Provides ergonomic single-digit drafting shortcuts (1, 2, 3, 4, 5) with
-;;;   automatic layer creation, target layer isolation, and automatic
-;;;   restoration of the drafter's previous active layer upon completion or Esc.
+;;;   Provides ergonomic single-digit drafting shortcuts (1, 2, 3, 4, 5...) with
+;;;   dual-mode operation:
+;;;     1. NO SELECTION: Automatic layer creation, target layer isolation/switching,
+;;;        and drafting tools (PL, REC, Grid, Viewport, Construction lines).
+;;;     2. SELECTION ACTIVE (Pickfirst): Instantly reassigns all selected entities
+;;;        to the chosen target layer (Keys 1-3 to dedicated layers, Keys 4-7 & `
+;;;        to category/R-layer lists via prompt/dialog), preserving CLAYER and
+;;;        retaining active selection for immediate follow-up commands (Move, Copy, Scale, etc.).
 ;;;
 ;;; KEY MAPPINGS:
-;;;   [1] / HL : Help Line (Draws on "01-HELP-LINE", restores previous layer)
-;;;   [2] / VP : Viewport Boundary (Draws frame on "02-VIEW-PORT", generates
-;;;              dynamic ISO A3 scale, title & metadata MText, center snap node)
-;;;   [3] / GL : Grid Line & System Generator (Interactive DCL grid maker,
-;;;              custom bay parsing, auto-bubbles, dimensions & single-line mode)
-;;;   [4] / LL : Line Layer (Interactive DCL selector, layer setup & polyline drawing)
-;;;   [5] / ML : Material Layer (Interactive DCL selector, layer setup & rectangle drawing)
-;;;   [6] / AD : Annotation & Dim Suite (Interactive DCL selector & layer switcher for R-ANNO-*)
-;;;   [7] / HD : Fittings & Hardware (Interactive DCL selector & layer switcher for R-HARD-*)
+;;;   [1] / HL : Help Line (Draws on "01-HELP-LINE" / Reassigns selection to "01-HELP-LINE")
+;;;   [2] / VP : Viewport Boundary (Draws frame on "02-VIEW-PORT" / Reassigns selection to "02-VIEW-PORT")
+;;;   [3] / GL : Grid Line & System Generator (DCL grid maker / Reassigns selection to "03-GRID-LINE")
+;;;   [4] / LL : Line Layer (Interactive DCL selector / Reassigns selection to R-LINE-* layer)
+;;;   [5] / ML : Material Layer (Interactive DCL selector / Reassigns selection to R-MAT-* layer)
+;;;   [6] / AD : Annotation & Dim Suite (Interactive DCL selector / Reassigns selection to R-ANNO-* layer)
+;;;   [7] / HD : Fittings & Hardware (Interactive DCL selector / Reassigns selection to R-HARD-* layer)
 ;;;   [8] / BL : Blocks & Components (Visual DCL insertion palette for standard joinery blocks)
-;;;   [-] / R- : R-Layer Selector (Interactive DCL inspector, layer setup & PL/REC drawing)
+;;;   [-] / R- : R-Layer Selector (Interactive DCL inspector / Reassigns selection to R-* layer)
 ;;;
 ;;; ==========================================================================
 
@@ -45,121 +48,130 @@
 ;;; --------------------------------------------------------------------------
 (vl-load-com)
 
-(defun c:HL ( / *error* oldLayer oldEcho lay pt1 pt2 history top
+(defun c:HL ( / ss *error* oldLayer oldEcho lay pt1 pt2 history top
                 firstPtEnt lEnt pEnt startPt _mkPoint _mkLine )
+  (setq ss (ssget "_I"))
   (setq lay (if *WF-LAYER-HL* *WF-LAYER-HL* "01-HELP-LINE"))
 
-  (defun *error* (msg)
-    (if oldEcho  (setvar "CMDECHO" oldEcho))
-    (if oldLayer (setvar "CLAYER" oldLayer))
-    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
-    (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
-      (princ (strcat "\n[HL] Error: " msg))
-    )
-    (princ)
-  )
-
-  ;; Helper: Create point entity on help layer (translates UCS -> WCS)
-  (defun _mkPoint (p)
-    (entmake
-      (list
-        '(0 . "POINT")
-        (cons 8 lay)
-        (cons 10 (trans p 1 0))
-      )
-    )
-    (entlast)
-  )
-
-  ;; Helper: Create line entity on help layer (translates UCS -> WCS)
-  (defun _mkLine (p1 p2)
-    (entmake
-      (list
-        '(0 . "LINE")
-        (cons 8 lay)
-        (cons 10 (trans p1 1 0))
-        (cons 11 (trans p2 1 0))
-      )
-    )
-    (entlast)
-  )
-
-  (setq oldEcho  (getvar "CMDECHO")
-        oldLayer (getvar "CLAYER"))
-  (setvar "CMDECHO" 0)
-
-  (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
-
-  ;; Safely set current layer using helper
-  (CadSetup:SetCurrentLayerSafe lay)
-
-  ;; Interactive loop
-  (setq pt1 (getpoint "\nSpecify first point: "))
-  (if pt1
+  (if (and ss (> (sslength ss) 0))
     (progn
-      ;; Live point on the very first click
-      (setq firstPtEnt (_mkPoint pt1)
-            history    (list (list nil nil firstPtEnt pt1)))
-
-      (while pt1
-        (if (> (length history) 1)
-          (initget "Undo Close")
-          (initget "Undo")
+      (CadSetup:AssignEntitiesToLayer ss lay)
+      (princ)
+    )
+    (progn
+      (defun *error* (msg)
+        (if oldEcho  (setvar "CMDECHO" oldEcho))
+        (if oldLayer (setvar "CLAYER" oldLayer))
+        (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+        (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
+          (princ (strcat "\n[HL] Error: " msg))
         )
-        ;; Native rubber-band line from pt1 to cursor
-        (setq pt2 (getpoint pt1 (if (> (length history) 1)
-                                  "\nSpecify next point or [Close/Undo]: "
-                                  "\nSpecify next point or [Undo]: ")))
-        (cond
-          ;; Undo handling
-          ((= pt2 "Undo")
-           (setq top     (car history)
-                 history (cdr history))
-           (if (cadr top)  (entdel (cadr top)))   ; delete line segment
-           (if (caddr top) (entdel (caddr top)))  ; delete point node
-           (if history
-             (setq pt1 (last (car history)))
-             (progn
-               ;; Undid the initial click; prompt for start point again
-               (setq pt1 (getpoint "\nSpecify first point: "))
-               (if pt1
-                 (setq firstPtEnt (_mkPoint pt1)
-                       history    (list (list nil nil firstPtEnt pt1)))
+        (princ)
+      )
+
+      ;; Helper: Create point entity on help layer (translates UCS -> WCS)
+      (defun _mkPoint (p)
+        (entmake
+          (list
+            '(0 . "POINT")
+            (cons 8 lay)
+            (cons 10 (trans p 1 0))
+          )
+        )
+        (entlast)
+      )
+
+      ;; Helper: Create line entity on help layer (translates UCS -> WCS)
+      (defun _mkLine (p1 p2)
+        (entmake
+          (list
+            '(0 . "LINE")
+            (cons 8 lay)
+            (cons 10 (trans p1 1 0))
+            (cons 11 (trans p2 1 0))
+          )
+        )
+        (entlast)
+      )
+
+      (setq oldEcho  (getvar "CMDECHO")
+            oldLayer (getvar "CLAYER"))
+      (setvar "CMDECHO" 0)
+
+      (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
+
+      ;; Safely set current layer using helper
+      (CadSetup:SetCurrentLayerSafe lay)
+
+      ;; Interactive loop
+      (setq pt1 (getpoint "\nSpecify first point: "))
+      (if pt1
+        (progn
+          ;; Live point on the very first click
+          (setq firstPtEnt (_mkPoint pt1)
+                history    (list (list nil nil firstPtEnt pt1)))
+
+          (while pt1
+            (if (> (length history) 1)
+              (initget "Undo Close")
+              (initget "Undo")
+            )
+            ;; Native rubber-band line from pt1 to cursor
+            (setq pt2 (getpoint pt1 (if (> (length history) 1)
+                                      "\nSpecify next point or [Close/Undo]: "
+                                      "\nSpecify next point or [Undo]: ")))
+            (cond
+              ;; Undo handling
+              ((= pt2 "Undo")
+               (setq top     (car history)
+                     history (cdr history))
+               (if (cadr top)  (entdel (cadr top)))   ; delete line segment
+               (if (caddr top) (entdel (caddr top)))  ; delete point node
+               (if history
+                 (setq pt1 (last (car history)))
+                 (progn
+                   ;; Undid the initial click; prompt for start point again
+                   (setq pt1 (getpoint "\nSpecify first point: "))
+                   (if pt1
+                     (setq firstPtEnt (_mkPoint pt1)
+                           history    (list (list nil nil firstPtEnt pt1)))
+                   )
+                 )
                )
-             )
-           )
-          )
+              )
 
-          ;; Close polygon handling
-          ((= pt2 "Close")
-           (setq startPt (last (last history)))
-           (_mkLine pt1 startPt)
-           (setq pt1 nil)
-          )
+              ;; Close polygon handling
+              ((= pt2 "Close")
+               (setq startPt (last (last history)))
+               (_mkLine pt1 startPt)
+               (setq pt1 nil)
+              )
 
-          ;; Next point picked
-          ((listp pt2)
-           (setq lEnt (_mkLine pt1 pt2)
-                 pEnt (_mkPoint pt2))
-           (setq history (cons (list pt1 lEnt pEnt pt2) history))
-           (setq pt1 pt2)
-          )
+              ;; Next point picked
+              ((listp pt2)
+               (setq lEnt (_mkLine pt1 pt2)
+                     pEnt (_mkPoint pt2))
+               (setq history (cons (list pt1 lEnt pEnt pt2) history))
+               (setq pt1 pt2)
+              )
 
-          ;; Enter / Space / nil to exit
-          (t
-           (setq pt1 nil)
+              ;; Enter / Space / nil to exit
+              (t
+               (setq pt1 nil)
+              )
+            )
           )
         )
       )
+
+      (setvar "CLAYER" oldLayer)
+      (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+      (setvar "CMDECHO" oldEcho)
+
+      (princ (strcat "\n[HL] Completed. Restored layer: " oldLayer))
+      (princ)
     )
   )
-
-  (setvar "CLAYER" oldLayer)
-  (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
-  (setvar "CMDECHO" oldEcho)
-
-  (princ (strcat "\n[HL] Completed. Restored layer: " oldLayer))
-  (princ)
 )
 
 (defun c:1 () (c:HL))
@@ -168,16 +180,23 @@
 ;;; --------------------------------------------------------------------------
 ;;; 2. VIEWPORT BOUNDARY & METADATA TAGGER (2 / VP)
 ;;; --------------------------------------------------------------------------
-(defun c:VP ( / *error* oldLayer oldEcho lastEnt newEnt bbox
+(defun c:VP ( / ss *error* oldLayer oldEcho lastEnt newEnt bbox
                 oldDimScale oldDimClrd oldDimClre oldDimClrt oldDimBlk
                 oldDimAsz oldDimTad oldDimTxt oldDimDec oldDimZin oldDimTxSty
                 p1 p2 w h sc th offsetIn insInX insInY
                 vpName cdate dotPos dPart tPart dtStr areaStr ratioStr scVal refScStr
                 midPt lay dimLay dimOff ptTop1 ptTop2 ptTopDim ptRt1 ptRt2 ptRtDim )
 
+  (setq ss (ssget "_I"))
   (setq lay (if *WF-LAYER-VP* *WF-LAYER-VP* "02-VIEW-PORT"))
 
-  (setq oldEcho     (getvar "CMDECHO")
+  (if (and ss (> (sslength ss) 0))
+    (progn
+      (CadSetup:AssignEntitiesToLayer ss lay)
+      (princ)
+    )
+    (progn
+      (setq oldEcho     (getvar "CMDECHO")
         oldLayer    (getvar "CLAYER")
         oldDimScale (getvar "DIMSCALE")
         oldDimClrd  (getvar "DIMCLRD")
@@ -393,6 +412,8 @@
 
   (princ (strcat "\n[VP] Completed. Restored layer: " oldLayer))
   (princ)
+    )
+  )
 )
 
 (defun c:2 () (c:VP))
@@ -1221,21 +1242,32 @@
 )
 
 ;; Main Command Entry Point: GL / 3
-(defun c:GL ( / opt )
-  (initget "Dialog Single Line GL 3")
-  (setq opt (getkword "\nGrid System [Dialog/Single Line] <Dialog>: "))
-  (cond
-    ((or (null opt) (= opt "Dialog") (= opt "D"))
-     (c:GRID-GENERATOR-DIALOG)
+(defun c:GL ( / ss lay opt )
+  (setq ss (ssget "_I"))
+  (setq lay (if *WF-LAYER-GL* *WF-LAYER-GL* "03-GRID-LINE"))
+
+  (if (and ss (> (sslength ss) 0))
+    (progn
+      (CadSetup:AssignEntitiesToLayer ss lay)
+      (princ)
     )
-    ((or (= opt "Single") (= opt "Line") (= opt "GL") (= opt "3"))
-     (CadSetup:DrawSingleGridLine)
-    )
-    (t
-     (c:GRID-GENERATOR-DIALOG)
+    (progn
+      (initget "Dialog Single Line GL 3")
+      (setq opt (getkword "\nGrid System [Dialog/Single Line] <Dialog>: "))
+      (cond
+        ((or (null opt) (= opt "Dialog") (= opt "D"))
+         (c:GRID-GENERATOR-DIALOG)
+        )
+        ((or (= opt "Single") (= opt "Line") (= opt "GL") (= opt "3"))
+         (CadSetup:DrawSingleGridLine)
+        )
+        (t
+         (c:GRID-GENERATOR-DIALOG)
+        )
+      )
+      (princ)
     )
   )
-  (princ)
 )
 
 (defun c:3 () (c:GL))
@@ -1608,7 +1640,7 @@
                                    updateDetails newCol selLtypeIdx selLwIdx
                                    rawVal rawScl defRow defCol defLt defLw
                                    defPlot defPat defScl defRot defTrans
-                                   oldEcho item toolStr)
+                                   oldEcho item toolStr isAssignMode targetSS)
   (defun *error* (msg)
     (if (and dclId (>= dclId 0))
       (vl-catch-all-apply 'unload_dialog (list dclId))
@@ -1617,6 +1649,18 @@
       (princ (strcat "\n[UDLS Dialog Error]: " msg))
     )
     (princ)
+  )
+
+  ;; Detect Assign Mode from defaultTool
+  (setq isAssignMode nil
+        targetSS     nil)
+  (cond
+    ((and (listp defaultTool) (= (car defaultTool) :ASSIGN))
+     (setq isAssignMode T
+           targetSS     (cadr defaultTool)))
+    ((and defaultTool (stringp defaultTool) (or (= (strcase defaultTool) "ASSIGN") (= (strcase defaultTool) ":ASSIGN")))
+     (setq isAssignMode T
+           targetSS     (ssget "_I")))
   )
 
   ;; 1. Retrieve matching layers from active drawing
@@ -1708,7 +1752,12 @@
       )
 
       ;; Configure list box label
-      (set_tile "box_layers_list" (strcat "Available Layers (" filterPattern ")"))
+      (set_tile "box_layers_list" 
+        (if isAssignMode
+          (strcat "Assign to Selection (" filterPattern ")")
+          (strcat "Available Layers (" filterPattern ")")
+        )
+      )
 
       ;; Populate layers listbox
       (start_list "lst_layers")
@@ -1825,20 +1874,32 @@
         )
       )
 
-      ;; Configure Action Buttons based on defaultTool
-      (setq toolStr (if defaultTool (strcase (vl-princ-to-string defaultTool)) ""))
+      ;; Configure Action Buttons based on defaultTool / isAssignMode
+      (setq toolStr (if defaultTool (strcase (vl-princ-to-string (if (listp defaultTool) (car defaultTool) defaultTool))) ""))
       (cond
+        (isAssignMode
+         (mode_tile "btn_draw_pl" 1)
+         (mode_tile "btn_draw_rec" 1)
+         (set_tile "btn_current" "Assign to Selection")
+         (mode_tile "btn_current" 0)
+         (mode_tile "btn_current" 2) ; Set focus on Assign to Selection
+        )
         ((or (= toolStr "PL") (= toolStr "POLYLINE") (= toolStr ":TOOL-PL"))
+         (set_tile "btn_current" "Make Current Only")
          (mode_tile "btn_draw_pl" 0)
          (mode_tile "btn_draw_rec" 1)
+         (mode_tile "btn_current" 0)
          (mode_tile "btn_draw_pl" 2) ; Set focus
         )
         ((or (= toolStr "REC") (= toolStr "RECTANGLE") (= toolStr ":TOOL-REC"))
+         (set_tile "btn_current" "Make Current Only")
          (mode_tile "btn_draw_pl" 1)
          (mode_tile "btn_draw_rec" 0)
+         (mode_tile "btn_current" 0)
          (mode_tile "btn_draw_rec" 2) ; Set focus
         )
         ((or (= toolStr "NONE") (= toolStr "CURRENT") (= toolStr ":CURRENT"))
+         (set_tile "btn_current" "Make Current Only")
          (mode_tile "btn_draw_pl" 1)
          (mode_tile "btn_draw_rec" 1)
          (mode_tile "btn_current" 0)
@@ -1846,8 +1907,10 @@
         )
         (t
          ;; defaultTool is nil - both drawing buttons active
+         (set_tile "btn_current" "Make Current Only")
          (mode_tile "btn_draw_pl" 0)
          (mode_tile "btn_draw_rec" 0)
+         (mode_tile "btn_current" 0)
         )
       )
 
@@ -1862,6 +1925,8 @@
          (updateDetails selLayer)
          (if (= $reason 4)
            (cond
+             (isAssignMode
+              (done_dialog 4))
              ((or (= toolStr \"NONE\") (= toolStr \"CURRENT\") (= toolStr \":CURRENT\"))
               (done_dialog 3))
              ((or (= toolStr \"REC\") (= toolStr \"RECTANGLE\") (= toolStr \":TOOL-REC\"))
@@ -1990,7 +2055,12 @@
 
       (action_tile "btn_draw_pl" "(done_dialog 1)")
       (action_tile "btn_draw_rec" "(done_dialog 2)")
-      (action_tile "btn_current" "(done_dialog 3)")
+      (action_tile "btn_current"
+        (if isAssignMode
+          "(done_dialog 4)"
+          "(done_dialog 3)"
+        )
+      )
       (action_tile "cancel" "(done_dialog 0)")
 
       (setq act (start_dialog))
@@ -2014,6 +2084,13 @@
 
       ;; Direct tool execution based on dialog action
       (cond
+        ((= act 4)
+         (if targetSS
+           (CadSetup:AssignEntitiesToLayer targetSS selLayer)
+           (princ (strcat "\n[UDLS] Target layer selected: " selLayer))
+         )
+         (list :assign selLayer)
+        )
         ((= act 1)
          (CadSetup:DrawPolyline selLayer)
          (list :draw-pl selLayer)
@@ -2061,25 +2138,44 @@
   (CadSetup:OpenLayerSelector "R-*" "R-Layer Selection && Property Inspector" nil T)
 )
 
+;; CadSetup:GetLayerPromptSuffix - Extracts clean command-line suffix for layer prompt
+(defun CadSetup:GetLayerPromptSuffix (layName filterPattern)
+  (cond
+    ((wcmatch (strcase filterPattern) "*LINE*")
+     (if (> (strlen layName) 7) (substr layName 8) layName))
+    ((wcmatch (strcase filterPattern) "*MAT*")
+     (if (> (strlen layName) 6) (substr layName 7) layName))
+    ((wcmatch (strcase filterPattern) "*ANNO*")
+     (if (> (strlen layName) 7) (substr layName 8) layName))
+    ((wcmatch (strcase filterPattern) "*HARD*")
+     (if (> (strlen layName) 7) (substr layName 8) layName))
+    ((wcmatch (strcase filterPattern) "R-*")
+     (if (> (strlen layName) 2) (substr layName 3) layName))
+    (t
+     layName)
+  )
+)
 
-;;; --------------------------------------------------------------------------
-;;; 5. COMMAND ENTRY POINTS (LL, ML, -, 4, 5, R-, RLAY)
-;;; --------------------------------------------------------------------------
+;; CadSetup:PromptAndAssignLayer - Generalized interactive layer selector & assignment for pre-selected objects
+;; Parameters:
+;;   ss            : Implied selection set (ssget "_I")
+;;   filterPattern : Layer wildcard pattern (e.g. "R-LINE-*", "R-MAT-*", "R-ANNO-*", "R-HARD-*", "R-*")
+;;   categoryLabel : Human-readable category string (e.g. "Line", "Material", "Annotation", "Hardware", "R-Layer")
+;;   showHatch     : Boolean flag whether to show hatch specs in DCL dialog (T for materials/R-layers, nil otherwise)
+(defun CadSetup:PromptAndAssignLayer (ss filterPattern categoryLabel showHatch /
+                                      matchingLayers kwMap promptStr kwStr suffix kw opt chosenLayer)
+  (setq matchingLayers (CadSetup:GetDrawingLayersByPattern filterPattern))
 
-;; c:LL - Line Layer / Polyline Workflow Entry Point
-(defun c:LL ( / lineLayers promptStr kwStr kwMap suffix kw opt chosenLayer )
-  (setq lineLayers (CadSetup:GetDrawingLayersByPattern "R-LINE-*"))
-
-  (if (null lineLayers)
-    (CadSetup:OpenLayerSelector "R-LINE-*" "Line Layer Selection && Property Inspector" "PL" nil)
+  (if (null matchingLayers)
+    (CadSetup:OpenLayerSelector filterPattern (strcat "Assign " categoryLabel " Layer to Selection") (list :ASSIGN ss) showHatch)
     (progn
       ;; Build Command-Line Keywords and Prompt Map
       (setq kwMap '(("DIALOG" . "DIALOG") ("D" . "DIALOG")))
-      (setq promptStr "\nSelect Line [Dialog")
+      (setq promptStr (strcat "\nAssign " categoryLabel " to Selection [Dialog"))
       (setq kwStr "Dialog D")
 
-      (foreach lay lineLayers
-        (setq suffix (if (> (strlen lay) 7) (substr lay 8) lay))
+      (foreach lay matchingLayers
+        (setq suffix (CadSetup:GetLayerPromptSuffix lay filterPattern))
         (setq kw (strcase (vl-string-translate " " "_" suffix)))
         (setq kwMap (cons (cons kw lay) kwMap))
         (setq promptStr (strcat promptStr "/" suffix))
@@ -2091,12 +2187,62 @@
       (setq opt (getkword promptStr))
 
       (if (or (null opt) (= (strcase opt) "DIALOG") (= (strcase opt) "D"))
-        (CadSetup:OpenLayerSelector "R-LINE-*" "Line Layer Selection && Property Inspector" "PL" nil)
+        (CadSetup:OpenLayerSelector filterPattern (strcat "Assign " categoryLabel " Layer to Selection") (list :ASSIGN ss) showHatch)
         (progn
           (setq chosenLayer (cdr (assoc (strcase (vl-string-translate " " "_" opt)) kwMap)))
           (if chosenLayer
-            (CadSetup:DrawPolyline chosenLayer)
-            (princ (strcat "\n[LL] Unrecognized line layer: " opt))
+            (CadSetup:AssignEntitiesToLayer ss chosenLayer)
+            (princ (strcat "\n[" categoryLabel "] Unrecognized layer: " opt))
+          )
+        )
+      )
+    )
+  )
+  (princ)
+)
+
+
+;;; --------------------------------------------------------------------------
+;;; 5. COMMAND ENTRY POINTS (LL, ML, -, 4, 5, R-, RLAY)
+;;; --------------------------------------------------------------------------
+
+;; c:LL - Line Layer / Polyline Workflow Entry Point
+(defun c:LL ( / ss lineLayers promptStr kwStr kwMap suffix kw opt chosenLayer )
+  (setq ss (ssget "_I"))
+  (if (and ss (> (sslength ss) 0))
+    (CadSetup:PromptAndAssignLayer ss "R-LINE-*" "Line" nil)
+    (progn
+      (setq lineLayers (CadSetup:GetDrawingLayersByPattern "R-LINE-*"))
+
+      (if (null lineLayers)
+        (CadSetup:OpenLayerSelector "R-LINE-*" "Line Layer Selection && Property Inspector" "PL" nil)
+        (progn
+          ;; Build Command-Line Keywords and Prompt Map
+          (setq kwMap '(("DIALOG" . "DIALOG") ("D" . "DIALOG")))
+          (setq promptStr "\nSelect Line [Dialog")
+          (setq kwStr "Dialog D")
+
+          (foreach lay lineLayers
+            (setq suffix (if (> (strlen lay) 7) (substr lay 8) lay))
+            (setq kw (strcase (vl-string-translate " " "_" suffix)))
+            (setq kwMap (cons (cons kw lay) kwMap))
+            (setq promptStr (strcat promptStr "/" suffix))
+            (setq kwStr (strcat kwStr " " kw))
+          )
+          (setq promptStr (strcat promptStr "] <Dialog>: "))
+
+          (initget kwStr)
+          (setq opt (getkword promptStr))
+
+          (if (or (null opt) (= (strcase opt) "DIALOG") (= (strcase opt) "D"))
+            (CadSetup:OpenLayerSelector "R-LINE-*" "Line Layer Selection && Property Inspector" "PL" nil)
+            (progn
+              (setq chosenLayer (cdr (assoc (strcase (vl-string-translate " " "_" opt)) kwMap)))
+              (if chosenLayer
+                (CadSetup:DrawPolyline chosenLayer)
+                (princ (strcat "\n[LL] Unrecognized line layer: " opt))
+              )
+            )
           )
         )
       )
@@ -2109,50 +2255,56 @@
 
 
 ;; c:ML - Material Layer / Rectangle Workflow Entry Point
-(defun c:ML ( / matLayers promptStr kwStr kwMap suffix kw opt chosenLayer )
-  (setq matLayers (CadSetup:GetDrawingLayersByPattern "R-MAT-*"))
-
-  (if (null matLayers)
-    (CadSetup:OpenLayerSelector "R-MAT-*" "Material Selection && Property Inspector" "REC" T)
+(defun c:ML ( / ss matLayers promptStr kwStr kwMap suffix kw opt chosenLayer )
+  (setq ss (ssget "_I"))
+  (if (and ss (> (sslength ss) 0))
+    (CadSetup:PromptAndAssignLayer ss "R-MAT-*" "Material" T)
     (progn
-      (setq kwMap '(("DIALOG" . "DIALOG") ("D" . "DIALOG")
-                    ("AUTOHATCH" . "AUTOHATCH") ("AH" . "AUTOHATCH") ("A" . "AUTOHATCH")))
-      (setq kwStr "Dialog D AutoHatch AH A")
+      (setq matLayers (CadSetup:GetDrawingLayersByPattern "R-MAT-*"))
 
-      (foreach lay matLayers
-        (setq suffix (if (> (strlen lay) 6) (substr lay 7) lay))
-        (setq kw (strcase (vl-string-translate " " "_" suffix)))
-        (setq kwMap (cons (cons kw lay) kwMap))
-        (setq kwStr (strcat kwStr " " kw))
-      )
-
-      (setq opt "AUTOHATCH")
-      (while (and opt (or (= (strcase opt) "AUTOHATCH") (= (strcase opt) "AH") (= (strcase opt) "A")))
-        (setq promptStr (strcat "\nSelect Material (AutoHatch: " (if *CadSetup-AutoHatch-Enabled* "ON" "OFF") ") [Dialog/AutoHatch"))
-        (foreach lay matLayers
-          (setq suffix (if (> (strlen lay) 6) (substr lay 7) lay))
-          (setq promptStr (strcat promptStr "/" suffix))
-        )
-        (setq promptStr (strcat promptStr "] <Dialog>: "))
-
-        (initget kwStr)
-        (setq opt (getkword promptStr))
-
-        (if (and opt (or (= (strcase opt) "AUTOHATCH") (= (strcase opt) "AH") (= (strcase opt) "A")))
-          (progn
-            (setq *CadSetup-AutoHatch-Enabled* (not *CadSetup-AutoHatch-Enabled*))
-            (princ (strcat "\n[ML] Smart Auto-Hatch is now " (if *CadSetup-AutoHatch-Enabled* "ON" "OFF") "."))
-          )
-        )
-      )
-
-      (if (or (null opt) (= (strcase opt) "DIALOG") (= (strcase opt) "D"))
+      (if (null matLayers)
         (CadSetup:OpenLayerSelector "R-MAT-*" "Material Selection && Property Inspector" "REC" T)
         (progn
-          (setq chosenLayer (cdr (assoc (strcase (vl-string-translate " " "_" opt)) kwMap)))
-          (if chosenLayer
-            (CadSetup:DrawContinuousRectangles chosenLayer)
-            (princ (strcat "\n[ML] Unrecognized material: " opt))
+          (setq kwMap '(("DIALOG" . "DIALOG") ("D" . "DIALOG")
+                        ("AUTOHATCH" . "AUTOHATCH") ("AH" . "AUTOHATCH") ("A" . "AUTOHATCH")))
+          (setq kwStr "Dialog D AutoHatch AH A")
+
+          (foreach lay matLayers
+            (setq suffix (if (> (strlen lay) 6) (substr lay 7) lay))
+            (setq kw (strcase (vl-string-translate " " "_" suffix)))
+            (setq kwMap (cons (cons kw lay) kwMap))
+            (setq kwStr (strcat kwStr " " kw))
+          )
+
+          (setq opt "AUTOHATCH")
+          (while (and opt (or (= (strcase opt) "AUTOHATCH") (= (strcase opt) "AH") (= (strcase opt) "A")))
+            (setq promptStr (strcat "\nSelect Material (AutoHatch: " (if *CadSetup-AutoHatch-Enabled* "ON" "OFF") ") [Dialog/AutoHatch"))
+            (foreach lay matLayers
+              (setq suffix (if (> (strlen lay) 6) (substr lay 7) lay))
+              (setq promptStr (strcat promptStr "/" suffix))
+            )
+            (setq promptStr (strcat promptStr "] <Dialog>: "))
+
+            (initget kwStr)
+            (setq opt (getkword promptStr))
+
+            (if (and opt (or (= (strcase opt) "AUTOHATCH") (= (strcase opt) "AH") (= (strcase opt) "A")))
+              (progn
+                (setq *CadSetup-AutoHatch-Enabled* (not *CadSetup-AutoHatch-Enabled*))
+                (princ (strcat "\n[ML] Smart Auto-Hatch is now " (if *CadSetup-AutoHatch-Enabled* "ON" "OFF") "."))
+              )
+            )
+          )
+
+          (if (or (null opt) (= (strcase opt) "DIALOG") (= (strcase opt) "D"))
+            (CadSetup:OpenLayerSelector "R-MAT-*" "Material Selection && Property Inspector" "REC" T)
+            (progn
+              (setq chosenLayer (cdr (assoc (strcase (vl-string-translate " " "_" opt)) kwMap)))
+              (if chosenLayer
+                (CadSetup:DrawContinuousRectangles chosenLayer)
+                (princ (strcat "\n[ML] Unrecognized material: " opt))
+              )
+            )
           )
         )
       )
@@ -2165,55 +2317,61 @@
 
 
 ;; c:AD - Annotation & Dim Suite / Layer Selection Entry Point
-(defun c:AD ( / *error* annoLayers promptStr kwStr kwMap suffix kw opt chosenLayer dbRow desc )
-  (defun *error* (msg)
-    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
-    (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
-      (princ (strcat "\n[AD] Error: " msg))
-    )
-    (princ)
-  )
-
-  (setq annoLayers (CadSetup:GetDrawingLayersByPattern "R-ANNO-*"))
-
-  (if (null annoLayers)
-    (CadSetup:OpenLayerSelector "R-ANNO-*" "Annotation & Dim Layer Selection && Property Inspector" ":CURRENT" nil)
+(defun c:AD ( / ss *error* annoLayers promptStr kwStr kwMap suffix kw opt chosenLayer dbRow desc )
+  (setq ss (ssget "_I"))
+  (if (and ss (> (sslength ss) 0))
+    (CadSetup:PromptAndAssignLayer ss "R-ANNO-*" "Annotation" nil)
     (progn
-      ;; Build Command-Line Keywords and Prompt Map
-      (setq kwMap '(("DIALOG" . "DIALOG") ("D" . "DIALOG")))
-      (setq promptStr "\nSelect Annotation [Dialog")
-      (setq kwStr "Dialog D")
-
-      (foreach lay annoLayers
-        ;; Layer names format: "R-ANNO-DIMS" -> suffix "DIMS" (length 7 prefix "R-ANNO-")
-        (setq suffix (if (> (strlen lay) 7) (substr lay 8) lay))
-        (setq kw (strcase (vl-string-translate " " "_" suffix)))
-        (setq kwMap (cons (cons kw lay) kwMap))
-        (setq promptStr (strcat promptStr "/" suffix))
-        (setq kwStr (strcat kwStr " " kw))
+      (defun *error* (msg)
+        (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+        (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
+          (princ (strcat "\n[AD] Error: " msg))
+        )
+        (princ)
       )
-      (setq promptStr (strcat promptStr "] <Dialog>: "))
 
-      (initget kwStr)
-      (setq opt (getkword promptStr))
+      (setq annoLayers (CadSetup:GetDrawingLayersByPattern "R-ANNO-*"))
 
-      (if (or (null opt) (= (strcase opt) "DIALOG") (= (strcase opt) "D"))
+      (if (null annoLayers)
         (CadSetup:OpenLayerSelector "R-ANNO-*" "Annotation & Dim Layer Selection && Property Inspector" ":CURRENT" nil)
         (progn
-          (setq chosenLayer (cdr (assoc (strcase (vl-string-translate " " "_" opt)) kwMap)))
-          (if chosenLayer
+          ;; Build Command-Line Keywords and Prompt Map
+          (setq kwMap '(("DIALOG" . "DIALOG") ("D" . "DIALOG")))
+          (setq promptStr "\nSelect Annotation [Dialog")
+          (setq kwStr "Dialog D")
+
+          (foreach lay annoLayers
+            ;; Layer names format: "R-ANNO-DIMS" -> suffix "DIMS" (length 7 prefix "R-ANNO-")
+            (setq suffix (if (> (strlen lay) 7) (substr lay 8) lay))
+            (setq kw (strcase (vl-string-translate " " "_" suffix)))
+            (setq kwMap (cons (cons kw lay) kwMap))
+            (setq promptStr (strcat promptStr "/" suffix))
+            (setq kwStr (strcat kwStr " " kw))
+          )
+          (setq promptStr (strcat promptStr "] <Dialog>: "))
+
+          (initget kwStr)
+          (setq opt (getkword promptStr))
+
+          (if (or (null opt) (= (strcase opt) "DIALOG") (= (strcase opt) "D"))
+            (CadSetup:OpenLayerSelector "R-ANNO-*" "Annotation & Dim Layer Selection && Property Inspector" ":CURRENT" nil)
             (progn
-              (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
-              (CadSetup:SetCurrentLayerSafe chosenLayer)
-              (setq *WF-LAYER-AD* chosenLayer
-                    *WF-LAYER-RL* chosenLayer)
-              (setq dbRow (if (boundp 'CadSetup:GetLayerData) (CadSetup:GetLayerData chosenLayer) nil))
-              (setq desc (if (and dbRow (nth 11 dbRow)) (vl-princ-to-string (nth 11 dbRow)) ""))
-              (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
-              (princ (strcat "\n[AD] Active layer set to: " chosenLayer
-                             (if (/= desc "") (strcat " (" desc ")") "")))
+              (setq chosenLayer (cdr (assoc (strcase (vl-string-translate " " "_" opt)) kwMap)))
+              (if chosenLayer
+                (progn
+                  (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
+                  (CadSetup:SetCurrentLayerSafe chosenLayer)
+                  (setq *WF-LAYER-AD* chosenLayer
+                        *WF-LAYER-RL* chosenLayer)
+                  (setq dbRow (if (boundp 'CadSetup:GetLayerData) (CadSetup:GetLayerData chosenLayer) nil))
+                  (setq desc (if (and dbRow (nth 11 dbRow)) (vl-princ-to-string (nth 11 dbRow)) ""))
+                  (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+                  (princ (strcat "\n[AD] Active layer set to: " chosenLayer
+                                 (if (/= desc "") (strcat " (" desc ")") "")))
+                )
+                (princ (strcat "\n[AD] Unrecognized annotation layer: " opt))
+              )
             )
-            (princ (strcat "\n[AD] Unrecognized annotation layer: " opt))
           )
         )
       )
@@ -2226,55 +2384,61 @@
 
 
 ;; c:HD - Hardware & Fittings / Layer Selection Entry Point
-(defun c:HD ( / *error* hardLayers promptStr kwStr kwMap suffix kw opt chosenLayer dbRow desc )
-  (defun *error* (msg)
-    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
-    (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
-      (princ (strcat "\n[HD] Error: " msg))
-    )
-    (princ)
-  )
-
-  (setq hardLayers (CadSetup:GetDrawingLayersByPattern "R-HARD-*"))
-
-  (if (null hardLayers)
-    (CadSetup:OpenLayerSelector "R-HARD-*" "Hardware & Fittings Layer Selection && Property Inspector" ":CURRENT" nil)
+(defun c:HD ( / ss *error* hardLayers promptStr kwStr kwMap suffix kw opt chosenLayer dbRow desc )
+  (setq ss (ssget "_I"))
+  (if (and ss (> (sslength ss) 0))
+    (CadSetup:PromptAndAssignLayer ss "R-HARD-*" "Hardware" nil)
     (progn
-      ;; Build Command-Line Keywords and Prompt Map
-      (setq kwMap '(("DIALOG" . "DIALOG") ("D" . "DIALOG")))
-      (setq promptStr "\nSelect Hardware [Dialog")
-      (setq kwStr "Dialog D")
-
-      (foreach lay hardLayers
-        ;; Layer names format: "R-HARD-FITTINGS" -> suffix "FITTINGS" (length 7 prefix "R-HARD-")
-        (setq suffix (if (> (strlen lay) 7) (substr lay 8) lay))
-        (setq kw (strcase (vl-string-translate " " "_" suffix)))
-        (setq kwMap (cons (cons kw lay) kwMap))
-        (setq promptStr (strcat promptStr "/" suffix))
-        (setq kwStr (strcat kwStr " " kw))
+      (defun *error* (msg)
+        (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+        (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
+          (princ (strcat "\n[HD] Error: " msg))
+        )
+        (princ)
       )
-      (setq promptStr (strcat promptStr "] <Dialog>: "))
 
-      (initget kwStr)
-      (setq opt (getkword promptStr))
+      (setq hardLayers (CadSetup:GetDrawingLayersByPattern "R-HARD-*"))
 
-      (if (or (null opt) (= (strcase opt) "DIALOG") (= (strcase opt) "D"))
+      (if (null hardLayers)
         (CadSetup:OpenLayerSelector "R-HARD-*" "Hardware & Fittings Layer Selection && Property Inspector" ":CURRENT" nil)
         (progn
-          (setq chosenLayer (cdr (assoc (strcase (vl-string-translate " " "_" opt)) kwMap)))
-          (if chosenLayer
+          ;; Build Command-Line Keywords and Prompt Map
+          (setq kwMap '(("DIALOG" . "DIALOG") ("D" . "DIALOG")))
+          (setq promptStr "\nSelect Hardware [Dialog")
+          (setq kwStr "Dialog D")
+
+          (foreach lay hardLayers
+            ;; Layer names format: "R-HARD-FITTINGS" -> suffix "FITTINGS" (length 7 prefix "R-HARD-")
+            (setq suffix (if (> (strlen lay) 7) (substr lay 8) lay))
+            (setq kw (strcase (vl-string-translate " " "_" suffix)))
+            (setq kwMap (cons (cons kw lay) kwMap))
+            (setq promptStr (strcat promptStr "/" suffix))
+            (setq kwStr (strcat kwStr " " kw))
+          )
+          (setq promptStr (strcat promptStr "] <Dialog>: "))
+
+          (initget kwStr)
+          (setq opt (getkword promptStr))
+
+          (if (or (null opt) (= (strcase opt) "DIALOG") (= (strcase opt) "D"))
+            (CadSetup:OpenLayerSelector "R-HARD-*" "Hardware & Fittings Layer Selection && Property Inspector" ":CURRENT" nil)
             (progn
-              (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
-              (CadSetup:SetCurrentLayerSafe chosenLayer)
-              (setq *WF-LAYER-HD* chosenLayer
-                    *WF-LAYER-RL* chosenLayer)
-              (setq dbRow (if (boundp 'CadSetup:GetLayerData) (CadSetup:GetLayerData chosenLayer) nil))
-              (setq desc (if (and dbRow (nth 11 dbRow)) (vl-princ-to-string (nth 11 dbRow)) ""))
-              (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
-              (princ (strcat "\n[HD] Active layer set to: " chosenLayer
-                             (if (/= desc "") (strcat " (" desc ")") "")))
+              (setq chosenLayer (cdr (assoc (strcase (vl-string-translate " " "_" opt)) kwMap)))
+              (if chosenLayer
+                (progn
+                  (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
+                  (CadSetup:SetCurrentLayerSafe chosenLayer)
+                  (setq *WF-LAYER-HD* chosenLayer
+                        *WF-LAYER-RL* chosenLayer)
+                  (setq dbRow (if (boundp 'CadSetup:GetLayerData) (CadSetup:GetLayerData chosenLayer) nil))
+                  (setq desc (if (and dbRow (nth 11 dbRow)) (vl-princ-to-string (nth 11 dbRow)) ""))
+                  (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+                  (princ (strcat "\n[HD] Active layer set to: " chosenLayer
+                                 (if (/= desc "") (strcat " (" desc ")") "")))
+                )
+                (princ (strcat "\n[HD] Unrecognized hardware layer: " opt))
+              )
             )
-            (princ (strcat "\n[HD] Unrecognized hardware layer: " opt))
           )
         )
       )
@@ -2692,73 +2856,79 @@
 )
 
 ;; c:` Main Entry Point for Workflow Key '`' (R-Layers)
-(defun c:` ( / *error* rLayers ans promptStr kwStr kwMap suffix kw opt res chosenLayer loopPrompt )
-  (defun *error* (msg)
-    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
-    (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
-      (princ (strcat "\n[-] Error: " msg))
-    )
-    (princ)
-  )
-
-  ;; 1. Check for existing R-* layers in active drawing
-  (setq rLayers (CadSetup:GetDrawingRLayers))
-
-  (if (null rLayers)
-    (CadSetup:OpenLayerSelector "R-*" "All R-* Layers Selection && Property Inspector" nil T)
+(defun c:` ( / ss *error* rLayers ans promptStr kwStr kwMap suffix kw opt res chosenLayer loopPrompt )
+  (setq ss (ssget "_I"))
+  (if (and ss (> (sslength ss) 0))
+    (CadSetup:PromptAndAssignLayer ss "R-*" "R-Layer" T)
     (progn
-      (if (null *WF-TOOL-RL*) (setq *WF-TOOL-RL* "Polyline"))
-
-      (setq loopPrompt t)
-      (while loopPrompt
-        (setq kwMap '(("DIALOG" . "DIALOG") ("D" . "DIALOG")
-                      ("PL" . :TOOL-PL) ("POLYLINE" . :TOOL-PL)
-                      ("REC" . :TOOL-REC) ("RECTANGLE" . :TOOL-REC)))
-        (setq promptStr (strcat "\nSelect R-Layer (" *WF-TOOL-RL* ") [Dialog/PL/REC"))
-        (setq kwStr "Dialog D PL Polyline REC Rectangle")
-
-        (foreach lay rLayers
-          (setq suffix (if (> (strlen lay) 2) (substr lay 3) lay))
-          (setq kw (strcase (vl-string-translate " " "_" suffix)))
-          (setq kwMap (cons (cons kw lay) kwMap))
-          (setq promptStr (strcat promptStr "/" suffix))
-          (setq kwStr (strcat kwStr " " kw))
+      (defun *error* (msg)
+        (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+        (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
+          (princ (strcat "\n[-] Error: " msg))
         )
-        (setq promptStr (strcat promptStr "] <Dialog>: "))
+        (princ)
+      )
 
-        (initget kwStr)
-        (setq opt (getkword promptStr))
+      ;; 1. Check for existing R-* layers in active drawing
+      (setq rLayers (CadSetup:GetDrawingRLayers))
 
-        (cond
-          ((or (equal opt "PL") (equal (and opt (strcase opt)) "POLYLINE"))
-           (setq *WF-TOOL-RL* "Polyline")
-           (princ "\n[-] Default drawing tool switched to: Polyline")
-          )
+      (if (null rLayers)
+        (CadSetup:OpenLayerSelector "R-*" "All R-* Layers Selection && Property Inspector" nil T)
+        (progn
+          (if (null *WF-TOOL-RL*) (setq *WF-TOOL-RL* "Polyline"))
 
-          ((or (equal opt "REC") (equal (and opt (strcase opt)) "RECTANGLE"))
-           (setq *WF-TOOL-RL* "Rectangle")
-           (princ "\n[-] Default drawing tool switched to: Rectangle")
-          )
+          (setq loopPrompt t)
+          (while loopPrompt
+            (setq kwMap '(("DIALOG" . "DIALOG") ("D" . "DIALOG")
+                          ("PL" . :TOOL-PL) ("POLYLINE" . :TOOL-PL)
+                          ("REC" . :TOOL-REC) ("RECTANGLE" . :TOOL-REC)))
+            (setq promptStr (strcat "\nSelect R-Layer (" *WF-TOOL-RL* ") [Dialog/PL/REC"))
+            (setq kwStr "Dialog D PL Polyline REC Rectangle")
 
-          ((or (null opt) (= (strcase opt) "DIALOG") (= (strcase opt) "D"))
-           (setq loopPrompt nil)
-           (CadSetup:OpenLayerSelector "R-*" "All R-* Layers Selection && Property Inspector" nil T)
-          )
+            (foreach lay rLayers
+              (setq suffix (if (> (strlen lay) 2) (substr lay 3) lay))
+              (setq kw (strcase (vl-string-translate " " "_" suffix)))
+              (setq kwMap (cons (cons kw lay) kwMap))
+              (setq promptStr (strcat promptStr "/" suffix))
+              (setq kwStr (strcat kwStr " " kw))
+            )
+            (setq promptStr (strcat promptStr "] <Dialog>: "))
 
-          (t
-           (setq loopPrompt nil)
-           (setq chosenLayer (cdr (assoc (strcase (vl-string-translate " " "_" opt)) kwMap)))
-           (if chosenLayer
-             (progn
-               (CadSetup:SetCurrentLayerSafe chosenLayer)
-               (setq *WF-LAYER-RL* chosenLayer)
-               (if (equal (strcase (if *WF-TOOL-RL* *WF-TOOL-RL* "Polyline")) "RECTANGLE")
-                 (CadSetup:DrawContinuousRectangles chosenLayer)
-                 (CadSetup:DrawPolyline chosenLayer)
+            (initget kwStr)
+            (setq opt (getkword promptStr))
+
+            (cond
+              ((or (equal opt "PL") (equal (and opt (strcase opt)) "POLYLINE"))
+               (setq *WF-TOOL-RL* "Polyline")
+               (princ "\n[-] Default drawing tool switched to: Polyline")
+              )
+
+              ((or (equal opt "REC") (equal (and opt (strcase opt)) "RECTANGLE"))
+               (setq *WF-TOOL-RL* "Rectangle")
+               (princ "\n[-] Default drawing tool switched to: Rectangle")
+              )
+
+              ((or (null opt) (= (strcase opt) "DIALOG") (= (strcase opt) "D"))
+               (setq loopPrompt nil)
+               (CadSetup:OpenLayerSelector "R-*" "All R-* Layers Selection && Property Inspector" nil T)
+              )
+
+              (t
+               (setq loopPrompt nil)
+               (setq chosenLayer (cdr (assoc (strcase (vl-string-translate " " "_" opt)) kwMap)))
+               (if chosenLayer
+                 (progn
+                   (CadSetup:SetCurrentLayerSafe chosenLayer)
+                   (setq *WF-LAYER-RL* chosenLayer)
+                   (if (equal (strcase (if *WF-TOOL-RL* *WF-TOOL-RL* "Polyline")) "RECTANGLE")
+                     (CadSetup:DrawContinuousRectangles chosenLayer)
+                     (CadSetup:DrawPolyline chosenLayer)
+                   )
+                 )
+                 (princ (strcat "\n[-] Unrecognized option: " opt))
                )
-             )
-             (princ (strcat "\n[-] Unrecognized option: " opt))
-           )
+              )
+            )
           )
         )
       )

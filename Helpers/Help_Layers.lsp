@@ -279,6 +279,118 @@
   )
 )
 
+;; ===========================================================================
+;; ENTITY LAYER REASSIGNMENT ENGINE
+;; ===========================================================================
+
+;; CadSetup:AssignEntitiesToLayer - Assigns selected entities (ss or list of enames) to a target layer.
+;; Unlocks target layer if locked, handles locked source layers, preserves CLAYER, retains active selection.
+;; Parameters:
+;;   ss      : Selection set (pickset) or list of enames
+;;   layName : Target layer name string (e.g. "R-LINE-VISB", "01-HELP-LINE")
+;; Returns integer count of modified entities, or nil on failure.
+(defun CadSetup:AssignEntitiesToLayer (ss layName / *error* acadApp doc count i ent obj res ssRet)
+  (defun *error* (msg)
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
+      (princ (strcat "\n[AssignLayer] Error: " msg))
+    )
+    (princ)
+  )
+
+  (if (and ss layName (= (type layName) 'STR) (> (strlen layName) 0))
+    (progn
+      ;; Ensure layer exists (load from DB if defined in Db_Layers.lsp)
+      (if (not (tblsearch "LAYER" layName))
+        (if (boundp 'CadSetup:EnsureLayerFromDb)
+          (CadSetup:EnsureLayerFromDb layName)
+        )
+      )
+      (if (not (tblsearch "LAYER" layName))
+        (progn
+          (princ (strcat "\n[AssignLayer] Error: Target layer \"" layName "\" unavailable."))
+          nil
+        )
+        (progn
+          ;; Ensure target layer is unlocked
+          (if (boundp 'CadSetup:EnsureLayerUnlocked)
+            (CadSetup:EnsureLayerUnlocked layName)
+          )
+          (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
+          (setq count   0
+                i       0
+                acadApp (vlax-get-acad-object)
+                doc     (if acadApp (vla-get-activedocument acadApp)))
+
+          (cond
+            ((= (type ss) 'PICKSET)
+             (while (< i (sslength ss))
+               (setq ent (ssname ss i))
+               (setq obj (vl-catch-all-apply 'vlax-ename->vla-object (list ent)))
+               (if (and (not (vl-catch-all-error-p obj)) (= (type obj) 'VLA-OBJECT))
+                 (progn
+                   (setq res (vl-catch-all-apply 'vla-put-layer (list obj layName)))
+                   (if (vl-catch-all-error-p res)
+                     (progn
+                       (if (boundp 'CadSetup:EnsureLayerUnlocked)
+                         (CadSetup:EnsureLayerUnlocked (cdr (assoc 8 (entget ent))))
+                       )
+                       (vl-catch-all-apply 'vla-put-layer (list obj layName))
+                     )
+                   )
+                   (setq count (1+ count))
+                 )
+               )
+               (setq i (1+ i))
+             )
+            )
+            ((listp ss)
+             (foreach ent ss
+               (if (= (type ent) 'ENAME)
+                 (setq obj (vl-catch-all-apply 'vlax-ename->vla-object (list ent)))
+                 (if (= (type ent) 'VLA-OBJECT) (setq obj ent) (setq obj nil))
+               )
+               (if (and obj (not (vl-catch-all-error-p obj)) (= (type obj) 'VLA-OBJECT))
+                 (progn
+                   (setq res (vl-catch-all-apply 'vla-put-layer (list obj layName)))
+                   (if (vl-catch-all-error-p res)
+                     (progn
+                       (if (and (= (type ent) 'ENAME) (boundp 'CadSetup:EnsureLayerUnlocked))
+                         (CadSetup:EnsureLayerUnlocked (cdr (assoc 8 (entget ent))))
+                       )
+                       (vl-catch-all-apply 'vla-put-layer (list obj layName))
+                     )
+                   )
+                   (setq count (1+ count))
+                 )
+               )
+             )
+            )
+          )
+
+          ;; Retain selection for follow-up commands (Move, Copy, Scale, etc.)
+          (cond
+            ((= (type ss) 'PICKSET)
+             (sssetfirst nil ss))
+            ((listp ss)
+             (setq ssRet (ssadd))
+             (foreach ent ss
+               (if (= (type ent) 'ENAME) (ssadd ent ssRet))
+             )
+             (if (> (sslength ssRet) 0) (sssetfirst nil ssRet))
+            )
+          )
+
+          (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+          (princ (strcat "\n[OK] " (itoa count) " object(s) assigned to layer: \"" layName "\"."))
+          count
+        )
+      )
+    )
+    nil
+  )
+)
+
 (if *CadSetup-Debug*
   (princ "\n[Helpers/Help_Layers.lsp] Safe Layer & Linetype management loaded.")
 )

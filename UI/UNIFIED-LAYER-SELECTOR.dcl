@@ -190,7 +190,7 @@ unified_layer_selector_dialog : dialog {
     : button {
       key = "btn_current";
       label = "Make Current Only";
-      width = 18;
+      width = 22;
     }
     : cancel_button {
       label = "Cancel";

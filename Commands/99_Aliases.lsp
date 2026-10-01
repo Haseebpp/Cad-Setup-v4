@@ -316,8 +316,6 @@
 (defun c:LD  () (initcommandversion) (command "_.LAYDEL")      (princ)) ; LD  -> Force-purge layer and all nested entities
 
 ;;; --- BLOCKS & EXTERNAL REFERENCES -----------------------------------------
-(defun c:RE  () (initcommandversion) (command "_.REFEDIT")     (princ)) ; RE  -> In-place Block / XREF editor
-(defun c:RC  () (initcommandversion) (command "_.REFCLOSE")    (princ)) ; RC  -> Save & Close in-place block reference
 (defun c:B   () (initcommandversion) (initdia) (command "_.BLOCK") (princ)) ; B   -> Open Block Definition creation dialog
 (defun c:I   () (initcommandversion) (command "_.INSERT") (princ)) ; I   -> Launch Modern Block Insertion palette
 

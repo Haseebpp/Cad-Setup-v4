@@ -219,7 +219,7 @@ Located in [Core/01_Undo-Manager.lsp](file:///d:/HASEEB/Cad-Setup-v4/Core/01_Und
 |:---:|:---:|:---|
 | `TS` | `TS` | Toggle between Dark Drafting Mode and White Presentation Mode |
 | `VR` | `VPCLIPRECTANGLE` | Duplicate layout viewport and clip with user rectangle |
-| `A3SERIES` | `A3SERIES` | Generates scaled A3 frames (1:1 through 1:50) at origin |
+| `A3SERIES` | `A3SERIES` | Generates scaled A3 frames (1:1 through 1:50) diagonally with outside labels |
 
 ### Productivity Aliases & Geometry Fixes
 | Shortcut | Native Command | Behavior |

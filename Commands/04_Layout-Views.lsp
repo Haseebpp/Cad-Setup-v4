@@ -63,44 +63,67 @@
 ;;; 2. A3 SCALE SERIES GENERATOR
 ;;; --------------------------------------------------------------------------
 
-;; A3SERIES : Generate A3 Scaled Reference Frames at Origin (1:1 to 1:50)
-(defun c:A3SERIES (/ *error* baseW baseH gap startPt currentScale 
-                     curW curH pt1 pt2 textHt textPt scaleList old-echo old-osmode old-layer)
+;; A3SERIES : Generate A3 Scaled Reference Frames Diagonally (1:1 to 1:50)
+(defun c:A3SERIES ( / *error* doc old-echo old-osmode old-layer
+                      targetLayer userPt startPt baseW baseH scaleList
+                      currentScale curW curH pt1 pt2 gapX gapY
+                      textHt textMargin textPt textStr )
   (setq old-echo   (getvar "CMDECHO")
         old-osmode (getvar "OSMODE")
-        old-layer  (getvar "CLAYER"))
+        old-layer  (getvar "CLAYER")
+        doc        (if (vlax-get-acad-object)
+                     (vla-get-activedocument (vlax-get-acad-object))
+                   ))
 
   (defun *error* (msg)
     (if old-osmode (setvar "OSMODE"  old-osmode))
     (if old-layer  (setvar "CLAYER"  old-layer))
     (if old-echo   (setvar "CMDECHO" old-echo))
-    (CadSetup:UndoReset)
+    (if (boundp 'CadSetup:UndoReset)
+      (CadSetup:UndoReset)
+      (if doc (vla-endundomark doc))
+    )
     (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
       (princ (strcat "\n[A3SERIES] Error: " msg))
     )
     (princ)
   )
 
-  (CadSetup:UndoStart)
+  ;; 1. Prompt for origin / starting insertion point (before turning off OSMODE)
+  (setq userPt (getpoint "\n[A3SERIES] Specify starting insertion point <0,0,0>: "))
+  (setq startPt (if userPt userPt '(0.0 0.0 0.0)))
+  (if (not (caddr startPt))
+    (setq startPt (list (car startPt) (cadr startPt) 0.0))
+  )
+
+  ;; 2. Start undo group and silence command echoing
+  (if (boundp 'CadSetup:UndoStart)
+    (CadSetup:UndoStart)
+    (if doc (vla-startundomark doc))
+  )
   (setvar "CMDECHO" 0)
   (setvar "OSMODE"  0)
 
-  (setq baseW 420.0 
-        baseH 297.0
-        gap   1000.0)
-
-  (setq startPt '(0.0 0.0 0.0))
-
+  ;; 3. Ensure target layer exists and is active
+  (setq targetLayer "R-ANNO-FRME")
   (if (and (boundp 'CadSetup:EnsureLayerFromDb) CadSetup:EnsureLayerFromDb)
-    (CadSetup:EnsureLayerFromDb "R-ANNO-FRME")
+    (CadSetup:EnsureLayerFromDb targetLayer)
   )
   (if (and (boundp 'CadSetup:SetCurrentLayerSafe) CadSetup:SetCurrentLayerSafe)
-    (CadSetup:SetCurrentLayerSafe "R-ANNO-FRME")
-    (setvar "CLAYER" "R-ANNO-FRME")
+    (CadSetup:SetCurrentLayerSafe targetLayer)
+    (if (tblsearch "LAYER" targetLayer)
+      (setvar "CLAYER" targetLayer)
+      (command "_.layer" "_make" targetLayer "")
+    )
   )
 
+  ;; 4. Dimensions and scale list
+  (setq baseW 420.0   ;; ISO A3 width (mm)
+        baseH 297.0)  ;; ISO A3 height (mm)
+
   (setq scaleList '(1 5 10 15 20 25 30 35 40 45 50))
-  
+
+  ;; 5. Generate frames and outside labels along ascending diagonal (+X, +Y)
   (foreach currentScale scaleList
     (setq curW (* baseW currentScale)
           curH (* baseH currentScale))
@@ -108,23 +131,66 @@
     (setq pt1 startPt
           pt2 (list (+ (car pt1) curW) (+ (cadr pt1) curH) (caddr pt1)))
 
-    (command "._RECTANG" pt1 pt2)
+    ;; Draw boundary frame (LWPOLYLINE with fallback to RECTANG)
+    (if (not (entmake
+               (list
+                 '(0 . "LWPOLYLINE")
+                 '(100 . "AcDbEntity")
+                 (cons 8 targetLayer)
+                 '(100 . "AcDbPolyline")
+                 '(90 . 4)
+                 '(70 . 1)  ;; Closed polyline
+                 (cons 10 (list (car pt1) (cadr pt1)))
+                 (cons 10 (list (car pt2) (cadr pt1)))
+                 (cons 10 (list (car pt2) (cadr pt2)))
+                 (cons 10 (list (car pt1) (cadr pt2)))
+               )))
+      (command "._RECTANG" "_non" pt1 "_non" pt2)
+    )
 
-    (setq textHt (* 10.0 currentScale)
-          textPt (list (+ (car pt1) (* 10.0 currentScale)) 
-                       (+ (cadr pt1) (* 10.0 currentScale)) 
-                       (caddr pt1)))
-    
-    (command "._TEXT" textPt textHt "0" (strcat "A3 @ 1:" (itoa currentScale)))
+    ;; Outside label: positioned 0.5x textHt below bottom-left corner, left-aligned
+    (setq textHt     (* 10.0 currentScale)
+          textMargin (* 5.0 currentScale)
+          textPt     (list (car pt1) (- (cadr pt1) textMargin) (caddr pt1))
+          textStr    (strcat "A3 @ 1:" (itoa currentScale)))
 
-    (setq startPt (list (+ (car startPt) curW gap) (cadr startPt) (caddr startPt)))
+    ;; Create MTEXT with Top-Left justification (Attachment 71 = 1)
+    (if (not (entmake
+               (list
+                 '(0 . "MTEXT")
+                 '(100 . "AcDbEntity")
+                 (cons 8 targetLayer)
+                 '(100 . "AcDbMText")
+                 (cons 10 textPt)
+                 (cons 40 textHt)
+                 '(41 . 0.0)
+                 '(71 . 1)  ;; Top Left
+                 '(72 . 1)  ;; Left to Right
+                 (cons 1 textStr)
+               )))
+      (command "._TEXT" "_J" "_TL" "_non" textPt textHt "0" textStr)
+    )
+
+    ;; Calculate dynamic gap (10% of frame dimensions) and step diagonally (+X, +Y)
+    (setq gapX (* curW 0.10)
+          gapY (* curH 0.10))
+    (setq startPt (list (+ (car pt1) curW gapX)
+                        (+ (cadr pt1) curH gapY)
+                        (caddr pt1)))
   )
-  
-  (if old-layer (setvar "CLAYER" old-layer))
-  (CadSetup:UndoEnd)
+
+  ;; 6. Restore environment and finish
+  (if (and (boundp 'CadSetup:SetCurrentLayerSafe) CadSetup:SetCurrentLayerSafe)
+    (CadSetup:SetCurrentLayerSafe old-layer)
+    (if old-layer (setvar "CLAYER" old-layer))
+  )
+  (if (boundp 'CadSetup:UndoEnd)
+    (CadSetup:UndoEnd)
+    (if doc (vla-endundomark doc))
+  )
   (setvar "CMDECHO" old-echo)
   (setvar "OSMODE"  old-osmode)
-  (princ "\n[A3SERIES] A3 scale series frames (1:1 to 1:50) created.")
+  (princ (strcat "\n[A3SERIES] Success: Created " (itoa (length scaleList)) " diagonal A3 scale frames (1:1 to 1:50) on layer \"" targetLayer "\"."))
   (princ)
 )
 

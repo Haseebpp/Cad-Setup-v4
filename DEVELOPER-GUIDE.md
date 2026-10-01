@@ -190,10 +190,13 @@ Use this pattern when the command delegates to a native AutoCAD interactive comm
 To comply with **Golden Rule 6**, never call raw `(vla-add ...)` or `(command "._-layer" ...)`:
 
 ```lisp
-;; Good practice: Automatically loads from Db_Layers.lsp or falls back to "0"
+;; Good practice: Automatically loads from Db_Layers.lsp, thaws, turns ON, and unlocks before making current
 (CadSetup:SetCurrentLayerSafe "R-LINE-VISB")
 
-;; To ensure a layer exists without making it current:
+;; To ensure a layer exists, is thawed, turned ON, and unlocked without switching CLAYER (silent):
+(CadSetup:EnsureLayerReady "03-GRID-LINE")
+
+;; To ensure a layer exists in the drawing definition from Database/Db_Layers.lsp:
 (CadSetup:EnsureLayerFromDb "R-ANNO-DIMS")
 ```
 

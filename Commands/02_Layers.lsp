@@ -537,7 +537,9 @@
         ;; --- COL 4: LINEWORK SAMPLE & ANNOTATION ---
         (if (and lName (tblsearch "LAYER" lName))
           (progn
-            (CadSetup:EnsureLayerUnlocked lName)
+            (if (boundp 'CadSetup:EnsureLayerReady)
+              (CadSetup:EnsureLayerReady lName)
+            )
             (setvar "CLAYER" lName)
           )
         )

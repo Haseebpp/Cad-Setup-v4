@@ -157,21 +157,25 @@
 )
 
 ;; ===========================================================================
-;; CURRENT LAYER SWITCHING
+;; CURRENT LAYER SWITCHING & STATE READINESS
 ;; ===========================================================================
 
-;; CadSetup:SetCurrentLayerSafe - Safely switches active layer (CLAYER)
-;; Ensures layer exists by loading from master database; falls back to layer "0" if missing.
-(defun CadSetup:SetCurrentLayerSafe (layName / acadApp doc layObj)
+;; CadSetup:EnsureLayerReady - Ensures a layer exists (from DB if needed),
+;; is thawed (not frozen), turned ON (not off), and unlocked (not locked).
+;; Operates completely silently for clean, rapid drafting.
+;; Returns T if layer exists and is ready, nil otherwise.
+(defun CadSetup:EnsureLayerReady (layName / acadApp doc layObj)
   (if (and layName (= (type layName) 'STR) (> (strlen layName) 0))
     (progn
-      ;; Ensure layer exists via Database lookup
+      ;; Ensure layer exists via Database lookup if not already in drawing
       (if (not (tblsearch "LAYER" layName))
-        (CadSetup:EnsureLayerFromDb layName)
+        (if (boundp 'CadSetup:EnsureLayerFromDb)
+          (CadSetup:EnsureLayerFromDb layName)
+        )
       )
       (if (tblsearch "LAYER" layName)
         (progn
-          ;; Ensure layer is thawed and unlocked before making current
+          ;; Ensure layer is thawed, turned ON, and unlocked
           (setq acadApp (vlax-get-acad-object))
           (if acadApp (setq doc (vla-get-activedocument acadApp)))
           (if doc
@@ -179,12 +183,37 @@
               (setq layObj (vl-catch-all-apply 'vla-item (list (vla-get-layers doc) layName)))
               (if (and (not (vl-catch-all-error-p layObj)) (= (type layObj) 'VLA-OBJECT))
                 (progn
-                  (if (= (vla-get-freeze layObj) :vlax-true) (vla-put-freeze layObj :vlax-false))
-                  (if (= (vla-get-lock layObj) :vlax-true)   (vla-put-lock layObj :vlax-false))
+                  (if (= (vla-get-freeze layObj) :vlax-true)
+                    (vl-catch-all-apply 'vla-put-freeze (list layObj :vlax-false))
+                  )
+                  (if (= (vla-get-layeron layObj) :vlax-false)
+                    (vl-catch-all-apply 'vla-put-layeron (list layObj :vlax-true))
+                  )
+                  (if (= (vla-get-lock layObj) :vlax-true)
+                    (vl-catch-all-apply 'vla-put-lock (list layObj :vlax-false))
+                  )
                 )
               )
             )
           )
+          T
+        )
+        nil
+      )
+    )
+    nil
+  )
+)
+
+;; CadSetup:SetCurrentLayerSafe - Safely switches active layer (CLAYER)
+;; Ensures layer exists, is thawed, turned ON, and unlocked before making current.
+;; Falls back to layer "0" if missing.
+(defun CadSetup:SetCurrentLayerSafe (layName / res)
+  (if (and layName (= (type layName) 'STR) (> (strlen layName) 0))
+    (progn
+      (setq res (CadSetup:EnsureLayerReady layName))
+      (if res
+        (progn
           (setvar "CLAYER" layName)
           T
         )
@@ -202,29 +231,6 @@
 ;; ===========================================================================
 ;; LAYER LOCK STATE MANAGEMENT
 ;; ===========================================================================
-
-;; CadSetup:EnsureLayerUnlocked - Safely unlocks a single layer if it exists and is locked
-(defun CadSetup:EnsureLayerUnlocked (layName / acadDoc layObj)
-  (if (and layName (= (type layName) 'STR) (> (strlen layName) 0) (tblsearch "LAYER" layName))
-    (progn
-      (setq acadDoc (CadSetup:GetDoc))
-      (if acadDoc
-        (vl-catch-all-apply
-          (function
-            (lambda ()
-              (setq layObj (vla-Item (vla-get-Layers acadDoc) layName))
-              (if (and layObj (= (vla-get-Lock layObj) :vlax-true))
-                (vla-put-Lock layObj :vlax-false)
-              )
-            )
-          )
-        )
-      )
-      T
-    )
-    nil
-  )
-)
 
 ;; CadSetup:UnlockAllLayers - Unlocks all currently locked layers in the active drawing
 ;; Returns a list of strings containing the names of layers that were previously locked.
@@ -312,9 +318,9 @@
           nil
         )
         (progn
-          ;; Ensure target layer is unlocked
-          (if (boundp 'CadSetup:EnsureLayerUnlocked)
-            (CadSetup:EnsureLayerUnlocked layName)
+          ;; Ensure target layer is ready (thawed, turned ON, unlocked)
+          (if (boundp 'CadSetup:EnsureLayerReady)
+            (CadSetup:EnsureLayerReady layName)
           )
           (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
           (setq count   0
@@ -332,8 +338,8 @@
                    (setq res (vl-catch-all-apply 'vla-put-layer (list obj layName)))
                    (if (vl-catch-all-error-p res)
                      (progn
-                       (if (boundp 'CadSetup:EnsureLayerUnlocked)
-                         (CadSetup:EnsureLayerUnlocked (cdr (assoc 8 (entget ent))))
+                       (if (boundp 'CadSetup:EnsureLayerReady)
+                         (CadSetup:EnsureLayerReady (cdr (assoc 8 (entget ent))))
                        )
                        (vl-catch-all-apply 'vla-put-layer (list obj layName))
                      )
@@ -355,8 +361,8 @@
                    (setq res (vl-catch-all-apply 'vla-put-layer (list obj layName)))
                    (if (vl-catch-all-error-p res)
                      (progn
-                       (if (and (= (type ent) 'ENAME) (boundp 'CadSetup:EnsureLayerUnlocked))
-                         (CadSetup:EnsureLayerUnlocked (cdr (assoc 8 (entget ent))))
+                       (if (and (= (type ent) 'ENAME) (boundp 'CadSetup:EnsureLayerReady))
+                         (CadSetup:EnsureLayerReady (cdr (assoc 8 (entget ent))))
                        )
                        (vl-catch-all-apply 'vla-put-layer (list obj layName))
                      )

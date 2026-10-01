@@ -89,7 +89,7 @@ d:\HASEEB\Cad-Setup-v4\
 │   ├── Help_ActiveX.lsp        ; Safe COM/VLA wrappers, safe getvar/setvar, clamp
 │   ├── Help_Geometry.lsp       ; Bounding boxes in UCS, curve lengths, midpoints, annotative scale
 │   ├── Help_Graphics.lsp       ; 2D primitives (DrawBox, DrawLine, AddText), hatch & draw order
-│   ├── Help_Layers.lsp         ; EnsureLayerFromDb, EnsureLayer, SetCurrentLayerSafe, LoadLinetype
+│   ├── Help_Layers.lsp         ; EnsureLayerReady, EnsureLayerFromDb, EnsureLayer, SetCurrentLayerSafe, LoadLinetype
 │   └── Help_Selection.lsp      ; ssget filters, predicates (is-annotation, is-revcloud)
 ├── Commands/
 │   ├── 00_System-Variables.lsp ; Applies sysvars from Database/Db_SysVars.lsp (APPLY-SYSVARS, RSV)

@@ -638,11 +638,17 @@
         oldLayer (getvar "CLAYER"))
   (setvar "CMDECHO" 0)
 
-  ;; Ensure production layers from database
-  (if (boundp 'CadSetup:EnsureLayerFromDb)
+  ;; Ensure production layers are ready (thawed, turned ON, and unlocked)
+  (if (boundp 'CadSetup:EnsureLayerReady)
     (progn
-      (CadSetup:EnsureLayerFromDb "03-GRID-LINE")
-      (CadSetup:EnsureLayerFromDb "R-ANNO-SYMB")
+      (CadSetup:EnsureLayerReady "03-GRID-LINE")
+      (CadSetup:EnsureLayerReady "R-ANNO-SYMB")
+    )
+    (if (boundp 'CadSetup:EnsureLayerFromDb)
+      (progn
+        (CadSetup:EnsureLayerFromDb "03-GRID-LINE")
+        (CadSetup:EnsureLayerFromDb "R-ANNO-SYMB")
+      )
     )
   )
 
@@ -809,12 +815,19 @@
   (setq rotAngle (getangle insPt "\n[GL] Specify Grid Rotation Angle <0.0>: "))
   (if (null rotAngle) (setq rotAngle 0.0))
 
-  ;; Ensure Layers from database
-  (if (boundp 'CadSetup:EnsureLayerFromDb)
+  ;; Ensure production layers are ready (thawed, turned ON, and unlocked)
+  (if (boundp 'CadSetup:EnsureLayerReady)
     (progn
-      (CadSetup:EnsureLayerFromDb "03-GRID-LINE")
-      (CadSetup:EnsureLayerFromDb "R-ANNO-SYMB")
-      (CadSetup:EnsureLayerFromDb "R-ANNO-DIMS")
+      (CadSetup:EnsureLayerReady "03-GRID-LINE")
+      (CadSetup:EnsureLayerReady "R-ANNO-SYMB")
+      (CadSetup:EnsureLayerReady "R-ANNO-DIMS")
+    )
+    (if (boundp 'CadSetup:EnsureLayerFromDb)
+      (progn
+        (CadSetup:EnsureLayerFromDb "03-GRID-LINE")
+        (CadSetup:EnsureLayerFromDb "R-ANNO-SYMB")
+        (CadSetup:EnsureLayerFromDb "R-ANNO-DIMS")
+      )
     )
   )
 
@@ -1027,7 +1040,10 @@
   ;; 6. Generate Automated Dimensions (R-ANNO-DIMS)
   (if (or (= addBayDims 1) (= addTotalDims 1))
     (progn
-      (setvar "CLAYER" "R-ANNO-DIMS")
+      (if (boundp 'CadSetup:SetCurrentLayerSafe)
+        (CadSetup:SetCurrentLayerSafe "R-ANNO-DIMS")
+        (setvar "CLAYER" "R-ANNO-DIMS")
+      )
 
       ;; X-Axis Dimension Placements (Above Top)
       (setq yBayDim (+ yTot gridExt (if hasTopBubble (* 2.0 bubbleRad) 0.0) dimOffset))
@@ -1563,6 +1579,9 @@
   (setq hTargetLay (if (and (boundp '*DEFAULT-HPLAYER*) *DEFAULT-HPLAYER* (/= *DEFAULT-HPLAYER* ""))
                      *DEFAULT-HPLAYER*
                      "R-HTCH-GENR"))
+  (if (and *CadSetup-AutoHatch-Enabled* (boundp 'CadSetup:EnsureLayerReady))
+    (CadSetup:EnsureLayerReady hTargetLay)
+  )
 
   (if (and *CadSetup-AutoHatch-Enabled* hPat (/= (strcase hPat) "NONE") (/= hPat ""))
     (princ (strcat "\n[REC Smart Auto-Hatch: ON] Pattern: " hPat " | Scale: " (rtos hScl 2 2) " | Rot: " (rtos hRot 2 1) " deg | Target: " hTargetLay))

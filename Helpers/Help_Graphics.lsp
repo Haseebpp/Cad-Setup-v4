@@ -22,7 +22,9 @@
       (vla-put-Closed poly :vlax-true)
       (if (and layName (tblsearch "LAYER" layName))
         (progn
-          (CadSetup:EnsureLayerUnlocked layName)
+          (if (boundp 'CadSetup:EnsureLayerReady)
+            (CadSetup:EnsureLayerReady layName)
+          )
           (vla-put-Layer poly layName)
         )
         (vla-put-Layer poly "0")
@@ -43,7 +45,9 @@
       (setq lineObj (vla-AddLine mSpace p1Arr p2Arr))
       (if (and layName (tblsearch "LAYER" layName))
         (progn
-          (CadSetup:EnsureLayerUnlocked layName)
+          (if (boundp 'CadSetup:EnsureLayerReady)
+            (CadSetup:EnsureLayerReady layName)
+          )
           (vla-put-Layer lineObj layName)
         )
         (vla-put-Layer lineObj "0")
@@ -67,7 +71,9 @@
       (setq txtObj (vla-AddText mSpace safeStr (vlax-3d-point pt) hgt))
       (if (and layName (tblsearch "LAYER" layName))
         (progn
-          (CadSetup:EnsureLayerUnlocked layName)
+          (if (boundp 'CadSetup:EnsureLayerReady)
+            (CadSetup:EnsureLayerReady layName)
+          )
           (vla-put-Layer txtObj layName)
         )
         (vla-put-Layer txtObj "0")
@@ -264,7 +270,9 @@
       (if (not (tblsearch "LAYER" targetLay))
         (setq targetLay "0")
       )
-      (CadSetup:EnsureLayerUnlocked targetLay)
+      (if (boundp 'CadSetup:EnsureLayerReady)
+        (CadSetup:EnsureLayerReady targetLay)
+      )
 
       (setq res
         (vl-catch-all-apply

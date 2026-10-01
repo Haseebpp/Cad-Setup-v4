@@ -84,7 +84,10 @@ Upon startup, the system automatically initializes all 36 production layers, lin
 ### 1. Numbered Workflow Keys (1–8, -)
 Single-digit drafting shortcuts mapped to top-row keys for rapid execution. Each key safely sets the destination standard layer, executes the drafting tool, and **restores the active working layer**:
 
-* `[1]` / `HL` : **Help Line** — Draws on `01-HELP-LINE` with live snap point nodes.
+* `[1]` / `HL` : **Help Line & Guide Points** — Interactive node point drafting on `01-HELP-LINE` with dynamic collinear line segment or infinite xline generation based on active `HLMODE`. Pre-selection extracts vertices into guide points.
+* `[1M]` / `HLMODE` : **Help Line Mode** — Switches `01-HELP-LINE` generation mode (`0` = Only Points, `1` = Collinear Line Segments [Default], `2` = Collinear Infinite Xlines) and instantly refreshes the layer.
+* `[1X]` : **Toggle Help Line Mode (1 ↔ 2)** — Instantly toggles between Mode 1 (Line Segments) and Mode 2 (Infinite Xlines) with a single keystroke.
+* `[XX]` : **Help Line Xlines** — Instantly sets `HLMODE` to `2` (Infinite Xlines) and launches the `HL` drafting tool.
 * `[/]` / `THL` : **Toggle Help Line** — Instantly toggles visibility (ON/OFF) of `01-HELP-LINE` (switches active layer safely if hidden).
 * `[2]` / `VP` : **Viewport Boundary** — Draws on `02-VIEW-PORT` and stamps dynamic ISO A3 scale metadata MText.
 * `[3]` / `GL` : **Grid Line Maker** — Launches the parametric structural grid generator.
@@ -185,7 +188,10 @@ Located in [Core/01_Undo-Manager.lsp](file:///d:/HASEEB/Cad-Setup-v4/Core/01_Und
 ### Rapid Drafting & Workflow Keys
 | Key / Command | Alias | Destination Layer | Description |
 |:---:|:---:|:---|:---|
-| `1` | `HL` | `01-HELP-LINE` | Help line with live snap nodes; restores previous layer |
+| `1` | `HL` | `01-HELP-LINE` | Help line guide points with live collinear line/xline generation |
+| `HLMODE` | `1M` | `01-HELP-LINE` | Switch help line mode (0=Points, 1=Lines [Default], 2=Xlines) & refresh |
+| `TOGGLE-HLMODE-1-2` | `1X` | `01-HELP-LINE` | Rapid toggle between HLMODE 1 (Line Segments) and 2 (Infinite Xlines) |
+| `HL-XLINES` | `XX` | `01-HELP-LINE` | Directly sets HLMODE to 2 (Infinite Xlines) and starts HL drafting |
 | `2` | `VP` | `02-VIEW-PORT` | Viewport box with auto A3 scale metadata stamp |
 | `3` | `GL` | `03-GRID-LINE` | Parametric structural grid generator with bay parser |
 | `4` | `LL` | `R-LINE-*` | Line layer DCL selector + polyline tool |

@@ -15,7 +15,10 @@
 ;;;        retaining active selection for immediate follow-up commands (Move, Copy, Scale, etc.).
 ;;;
 ;;; KEY MAPPINGS:
-;;;   [1] / HL : Help Line (Draws on "01-HELP-LINE" / Reassigns selection to "01-HELP-LINE")
+;;;   [1] / HL : Help Line & Guide Points (HLMODE 0=Points, 1=Lines [Default], 2=Xlines)
+;;;   [1M] / HLMODE / HLM : Switch Help Line generation mode (0, 1, 2) & instantly refresh layer
+;;;   [1X] : Rapid toggle between HLMODE 1 (Line Segments) and 2 (Infinite Xlines)
+;;;   [XX] : Direct Help Line with Infinite Xlines (sets HLMODE=2 and launches HL)
 ;;;   [2] / VP : Viewport Boundary (Draws frame on "02-VIEW-PORT" / Reassigns selection to "02-VIEW-PORT")
 ;;;   [3] / GL : Grid Line & System Generator (DCL grid maker / Reassigns selection to "03-GRID-LINE")
 ;;;   [4] / LL : Line Layer (Interactive DCL selector / Reassigns selection to R-LINE-* layer)
@@ -42,22 +45,510 @@
 (setq *WF-LAYER-RL* nil)                ;; Key -: Active R-Layer (set dynamically)
 (setq *WF-TOOL-RL* "Polyline")          ;; Key -: Default drawing tool ("Polyline" or "Rectangle")
 
+;; Help Line Generation Mode (HLMODE):
+;;   0 = Only Guide Points visible (clears all lines and xlines)
+;;   1 = Line Segments through collinear guide points (Default)
+;;   2 = Infinite Xlines through collinear guide points
+(if (null *HLMODE*) (setq *HLMODE* 1))
+(setq *HL-TOL* 0.001)                   ;; 1 micron coordinate tolerance for collinear detection
+
 
 ;;; --------------------------------------------------------------------------
-;;; 1. HELP LINE / CONSTRUCTION LINE WITH LIVE POINT NODES (1 / HL)
+;;; 1. HELP LINE / GUIDE POINT NODE ENGINE (1 / HL / HLMODE / HLM / 1M)
 ;;; --------------------------------------------------------------------------
 (vl-load-com)
 
-(defun c:HL ( / ss *error* oldLayer oldEcho lay pt1 pt2 history top
-                firstPtEnt lEnt pEnt startPt _mkPoint _mkLine )
-  (setq ss (ssget "_I"))
-  (setq lay (if *WF-LAYER-HL* *WF-LAYER-HL* "01-HELP-LINE"))
+;;; Low-level entity creation helpers (translating UCS -> WCS)
+(defun CadSetup:HL-MkPoint (pt lay / ptWCS)
+  (setq ptWCS (trans pt 1 0))
+  (entmake
+    (list
+      '(0 . "POINT")
+      (cons 8 lay)
+      (cons 10 ptWCS)
+    )
+  )
+  (entlast)
+)
+
+(defun CadSetup:HL-MkLine (p1 p2 lay / p1WCS p2WCS)
+  (setq p1WCS (trans p1 1 0)
+        p2WCS (trans p2 1 0))
+  (entmake
+    (list
+      '(0 . "LINE")
+      (cons 8 lay)
+      (cons 10 p1WCS)
+      (cons 11 p2WCS)
+    )
+  )
+  (entlast)
+)
+
+(defun CadSetup:HL-MkXLine (pt dir lay / basePt dirVec res acadApp doc ms obj)
+  (setq basePt (trans pt 1 0)
+        dirVec (trans dir 1 0 T))
+  (setq res (vl-catch-all-apply
+              'entmake
+              (list
+                (list
+                  '(0 . "XLINE")
+                  '(100 . "AcDbEntity")
+                  (cons 8 lay)
+                  '(100 . "AcDbXline")
+                  (cons 10 basePt)
+                  (cons 11 dirVec)
+                )
+              )))
+  (if (or (vl-catch-all-error-p res) (not res))
+    ;; Robust fallback to ActiveX if entmake fails
+    (progn
+      (setq acadApp (vlax-get-acad-object)
+            doc     (if acadApp (vla-get-activedocument acadApp))
+            ms      (if doc (vla-get-modelspace doc)))
+      (if ms
+        (progn
+          (setq obj (vl-catch-all-apply
+                      'vla-addxline
+                      (list ms
+                            (vlax-3d-point basePt)
+                            (vlax-3d-point (mapcar '+ basePt dirVec)))))
+          (if (and (not (vl-catch-all-error-p obj)) (= (type obj) 'VLA-OBJECT))
+            (progn
+              (vla-put-layer obj lay)
+              (vlax-vla-object->ename obj)
+            )
+            nil
+          )
+        )
+        nil
+      )
+    )
+    (entlast)
+  )
+)
+
+;;; Helper: Group points that share a coordinate within tolerance
+;;; coordIdx: 0 for X, 1 for Y
+(defun CadSetup:HL-GroupCollinear (pts coordIdx tol / sorted groups curGroup curCoord p val)
+  (if (and pts (> (length pts) 1))
+    (progn
+      ;; Sort points ascending along the target axis
+      (setq sorted (vl-sort (append pts nil)
+                            (function (lambda (a b)
+                                        (< (nth coordIdx a) (nth coordIdx b))))))
+      (setq groups   nil
+            curGroup nil
+            curCoord nil)
+      (foreach p sorted
+        (setq val (nth coordIdx p))
+        (if (null curGroup)
+          (setq curGroup (list p)
+                curCoord val)
+          (if (<= (abs (- val curCoord)) tol)
+            (setq curGroup (cons p curGroup))
+            (progn
+              (if (> (length curGroup) 1)
+                (setq groups (cons (reverse curGroup) groups))
+              )
+              (setq curGroup (list p)
+                    curCoord val)
+            )
+          )
+        )
+      )
+      (if (and curGroup (> (length curGroup) 1))
+        (setq groups (cons (reverse curGroup) groups))
+      )
+      (reverse groups)
+    )
+    nil
+  )
+)
+
+;;; Helper: De-duplicate points within tolerance
+(defun CadSetup:HL-DeduplicatePoints (pts tol / unique p)
+  (setq unique nil)
+  (foreach p pts
+    (if (not (vl-some (function (lambda (u) (equal p u tol))) unique))
+      (setq unique (cons p unique))
+    )
+  )
+  (reverse unique)
+)
+
+;;; Helper: Delete all LINE and XLINE entities on target layer
+(defun CadSetup:HL-ClearLines (lay / ssOld i ent)
+  (if (and lay (tblsearch "LAYER" lay))
+    (progn
+      (setq ssOld (ssget "_X" (list '(0 . "LINE,XLINE") (cons 8 lay))))
+      (if ssOld
+        (repeat (setq i (sslength ssOld))
+          (setq ent (ssname ssOld (setq i (1- i))))
+          (vl-catch-all-apply 'entdel (list ent))
+        )
+      )
+    )
+  )
+)
+
+;;; Helper: Read all points on target layer (in UCS)
+(defun CadSetup:HL-GetPoints (lay / ssPts i ent ed ptWCS ptUCS pts)
+  (setq pts nil)
+  (if (and lay (tblsearch "LAYER" lay))
+    (progn
+      (setq ssPts (ssget "_X" (list '(0 . "POINT") (cons 8 lay))))
+      (if ssPts
+        (repeat (setq i (sslength ssPts))
+          (setq ent   (ssname ssPts (setq i (1- i)))
+                ed    (entget ent)
+                ptWCS (cdr (assoc 10 ed))
+                ptUCS (trans ptWCS 0 1))
+          (setq pts (cons ptUCS pts))
+        )
+      )
+    )
+  )
+  pts
+)
+
+;;; Core Solver Engine: Solves and rebuilds Help Layer geometry from guide points
+(defun CadSetup:HL-SolveLayer (lay / *error* ssPts i ent ed ptWCS ptUCS pts
+                                   tol hGroups vGroups grp grpCoord sortedGrp
+                                   idx p1 p2)
+  (defun *error* (msg)
+    (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
+      (princ (strcat "\n[HL-Solve] Error: " msg))
+    )
+    (princ)
+  )
+
+  (if (null lay) (setq lay (if *WF-LAYER-HL* *WF-LAYER-HL* "01-HELP-LINE")))
+  (if (null *HLMODE*) (setq *HLMODE* 1))
+  (setq tol (if *HL-TOL* *HL-TOL* 0.001))
+
+  ;; Ensure target layer is unlocked, thawed, and turned ON
+  (if (boundp 'CadSetup:EnsureLayerReady)
+    (CadSetup:EnsureLayerReady lay)
+  )
+
+  ;; 1. Clean Refresh: Always remove all existing LINE and XLINE entities on layer
+  (CadSetup:HL-ClearLines lay)
+
+  ;; 2. If mode is 0 (Points Only), we stop here; only points remain visible
+  (if (= *HLMODE* 0)
+    (princ)
+    (progn
+      ;; 3. Collect all POINT entities on layer (translated from WCS -> UCS)
+      (setq pts (CadSetup:HL-GetPoints lay))
+
+      (if (and pts (> (length pts) 1))
+        (progn
+          ;; De-duplicate point coordinates
+          (setq pts (CadSetup:HL-DeduplicatePoints pts tol))
+
+          ;; -------------------------------------------------------------
+          ;; 4. Horizontal Collinear Groups (sharing Y coordinate in UCS)
+          ;; -------------------------------------------------------------
+          (setq hGroups (CadSetup:HL-GroupCollinear pts 1 tol))
+          (foreach grp hGroups
+            (setq grpCoord  (cadr (car grp)) ;; Canonical Y
+                  sortedGrp (vl-sort (append grp nil)
+                                     (function (lambda (a b) (< (car a) (car b))))))
+            ;; De-duplicate X values within the horizontal group
+            (setq sortedGrp (CadSetup:HL-DeduplicatePoints sortedGrp tol))
+            (if (>= (length sortedGrp) 2)
+              (cond
+                ;; Mode 1: Segment by segment between adjacent consecutive points
+                ((= *HLMODE* 1)
+                 (setq idx 0)
+                 (while (< idx (1- (length sortedGrp)))
+                   (setq p1 (nth idx sortedGrp)
+                         p2 (nth (1+ idx) sortedGrp))
+                   (if (> (- (car p2) (car p1)) tol)
+                     (CadSetup:HL-MkLine
+                       (list (car p1) grpCoord (caddr p1))
+                       (list (car p2) grpCoord (caddr p2))
+                       lay
+                     )
+                   )
+                   (setq idx (1+ idx))
+                 )
+                )
+                ;; Mode 2: Infinite horizontal Xline through the collinear row
+                ((= *HLMODE* 2)
+                 (CadSetup:HL-MkXLine
+                   (list (car (car sortedGrp)) grpCoord (caddr (car sortedGrp)))
+                   '(1.0 0.0 0.0)
+                   lay
+                 )
+                )
+              )
+            )
+          )
+
+          ;; -------------------------------------------------------------
+          ;; 5. Vertical Collinear Groups (sharing X coordinate in UCS)
+          ;; -------------------------------------------------------------
+          (setq vGroups (CadSetup:HL-GroupCollinear pts 0 tol))
+          (foreach grp vGroups
+            (setq grpCoord  (car (car grp)) ;; Canonical X
+                  sortedGrp (vl-sort (append grp nil)
+                                     (function (lambda (a b) (< (cadr a) (cadr b))))))
+            ;; De-duplicate Y values within the vertical group
+            (setq sortedGrp (CadSetup:HL-DeduplicatePoints sortedGrp tol))
+            (if (>= (length sortedGrp) 2)
+              (cond
+                ;; Mode 1: Segment by segment between adjacent consecutive points
+                ((= *HLMODE* 1)
+                 (setq idx 0)
+                 (while (< idx (1- (length sortedGrp)))
+                   (setq p1 (nth idx sortedGrp)
+                         p2 (nth (1+ idx) sortedGrp))
+                   (if (> (- (cadr p2) (cadr p1)) tol)
+                     (CadSetup:HL-MkLine
+                       (list grpCoord (cadr p1) (caddr p1))
+                       (list grpCoord (cadr p2) (caddr p2))
+                       lay
+                     )
+                   )
+                   (setq idx (1+ idx))
+                 )
+                )
+                ;; Mode 2: Infinite vertical Xline through the collinear column
+                ((= *HLMODE* 2)
+                 (CadSetup:HL-MkXLine
+                   (list grpCoord (cadr (car sortedGrp)) (caddr (car sortedGrp)))
+                   '(0.0 1.0 0.0)
+                   lay
+                 )
+                )
+              )
+            )
+          )
+        )
+      )
+    )
+  )
+  (princ)
+)
+
+;;; Helper: Extract vertices/endpoints from pre-selected entities into guide points
+(defun CadSetup:HL-ExtractVertices (ss lay / *error* i ent ed eType obj pts p1 p2 elev
+                                              vEnt tol count existPts ePt)
+  (defun *error* (msg)
+    (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
+      (princ (strcat "\n[HL-Extract] Error: " msg))
+    )
+    (princ)
+  )
+
+  (if (null lay) (setq lay (if *WF-LAYER-HL* *WF-LAYER-HL* "01-HELP-LINE")))
+  (setq tol (if *HL-TOL* *HL-TOL* 0.001))
+
+  ;; Ensure target layer is ready
+  (if (boundp 'CadSetup:EnsureLayerReady)
+    (CadSetup:EnsureLayerReady lay)
+  )
+
+  ;; Cache existing points on layer to avoid duplicates
+  (setq existPts (CadSetup:HL-GetPoints lay))
+
+  (setq pts   nil
+        count 0)
 
   (if (and ss (> (sslength ss) 0))
     (progn
-      (CadSetup:AssignEntitiesToLayer ss lay)
+      (repeat (setq i (sslength ss))
+        (setq ent   (ssname ss (setq i (1- i)))
+              ed    (entget ent)
+              eType (cdr (assoc 0 ed)))
+
+        (cond
+          ;; 1. LINE entity
+          ((= eType "LINE")
+           (setq p1 (trans (cdr (assoc 10 ed)) 0 1)
+                 p2 (trans (cdr (assoc 11 ed)) 0 1)
+                 pts (cons p1 (cons p2 pts)))
+           (vl-catch-all-apply 'entdel (list ent))
+          )
+
+          ;; 2. LWPOLYLINE entity
+          ((= eType "LWPOLYLINE")
+           (setq elev (cdr (assoc 38 ed)))
+           (if (null elev) (setq elev 0.0))
+           (foreach item ed
+             (if (= (car item) 10)
+               (setq p1 (trans (trans (list (cadr item) (caddr item) elev) ent 0) 0 1)
+                     pts (cons p1 pts))
+             )
+           )
+           (vl-catch-all-apply 'entdel (list ent))
+          )
+
+          ;; 3. Legacy 2D / 3D POLYLINE
+          ((= eType "POLYLINE")
+           (setq vEnt (entnext ent))
+           (while (and vEnt (/= (cdr (assoc 0 (entget vEnt))) "SEQEND"))
+             (setq p1 (trans (cdr (assoc 10 (entget vEnt))) 0 1)
+                   pts (cons p1 pts)
+                   vEnt (entnext vEnt))
+           )
+           (vl-catch-all-apply 'entdel (list ent))
+          )
+
+          ;; 4. POINT entity
+          ((= eType "POINT")
+           (setq p1 (trans (cdr (assoc 10 ed)) 0 1)
+                 pts (cons p1 pts))
+           ;; If not already on lay, delete from other layer
+           (if (/= (strcase (cdr (assoc 8 ed))) (strcase lay))
+             (vl-catch-all-apply 'entdel (list ent))
+           )
+          )
+
+          ;; 5. ARC or CIRCLE
+          ((or (= eType "ARC") (= eType "CIRCLE"))
+           (setq p1 (trans (cdr (assoc 10 ed)) 0 1)
+                 pts (cons p1 pts))
+           (if (= eType "ARC")
+             (progn
+               (setq obj (vl-catch-all-apply 'vlax-ename->vla-object (list ent)))
+               (if (and (not (vl-catch-all-error-p obj)) (= (type obj) 'VLA-OBJECT))
+                 (setq pts (cons (trans (vlax-curve-getstartpoint obj) 0 1)
+                           (cons (trans (vlax-curve-getendpoint obj) 0 1) pts)))
+               )
+             )
+           )
+           (vl-catch-all-apply 'entdel (list ent))
+          )
+
+          ;; 6. Generic Curve fallback (Spline, Ellipse, etc.)
+          ((wcmatch eType "SPLINE,ELLIPSE")
+           (setq obj (vl-catch-all-apply 'vlax-ename->vla-object (list ent)))
+           (if (and (not (vl-catch-all-error-p obj)) (= (type obj) 'VLA-OBJECT))
+             (setq pts (cons (trans (vlax-curve-getstartpoint obj) 0 1)
+                       (cons (trans (vlax-curve-getendpoint obj) 0 1) pts)))
+           )
+           (vl-catch-all-apply 'entdel (list ent))
+          )
+        )
+      )
+
+      ;; De-duplicate extracted points
+      (setq pts (CadSetup:HL-DeduplicatePoints pts tol))
+
+      ;; Create POINT entities on target layer for points not already present
+      (foreach p1 pts
+        (if (not (vl-some (function (lambda (ex) (equal p1 ex tol))) existPts))
+          (progn
+            (CadSetup:HL-MkPoint p1 lay)
+            (setq existPts (cons p1 existPts)
+                  count    (1+ count))
+          )
+        )
+      )
+
+      ;; Re-solve layer according to active HLMODE
+      (CadSetup:HL-SolveLayer lay)
+      (princ (strcat "\n[HL] Extracted " (itoa count) " new guide points to " lay
+                     " and solved geometry (HLMODE = " (itoa *HLMODE*) ")."))
+    )
+  )
+  count
+)
+
+;;; --------------------------------------------------------------------------
+;;; HLMODE COMMAND & SHORTCUTS (HLMODE / HLM / 1M)
+;;; --------------------------------------------------------------------------
+(defun c:HLMODE ( / curMode input newMode lay desc )
+  (if (null *HLMODE*) (setq *HLMODE* 1))
+  (setq curMode *HLMODE*
+        lay     (if *WF-LAYER-HL* *WF-LAYER-HL* "01-HELP-LINE"))
+
+  (setq desc (cond ((= curMode 0) "0 (Only Points)")
+                   ((= curMode 1) "1 (Line Segments)")
+                   ((= curMode 2) "2 (Infinite Xlines)")
+                   (t (itoa curMode))))
+  (princ (strcat "\nCurrent Help Line Mode: " desc))
+
+  (initget "0 1 2 Points Lines Xlines")
+  (setq input (getkword (strcat "\nEnter Help Line Mode [0=Points / 1=Lines / 2=Xlines] <" (itoa curMode) ">: ")))
+
+  (cond
+    ((or (= input "0") (= input "Points")) (setq newMode 0))
+    ((or (= input "1") (= input "Lines"))  (setq newMode 1))
+    ((or (= input "2") (= input "Xlines")) (setq newMode 2))
+    ((or (null input) (= input ""))        (setq newMode curMode))
+    (t (setq newMode curMode))
+  )
+
+  (setq *HLMODE* newMode)
+  (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
+  (CadSetup:HL-SolveLayer lay)
+  (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+
+  (setq desc (cond ((= *HLMODE* 0) "0 (Only Points)")
+                   ((= *HLMODE* 1) "1 (Line Segments)")
+                   ((= *HLMODE* 2) "2 (Infinite Xlines)")
+                   (t (itoa *HLMODE*))))
+  (princ (strcat "\n[HLMODE] Mode set to " desc ". \"" lay "\" refreshed successfully."))
+  (princ)
+)
+
+(defun c:HLM () (c:HLMODE))
+(defun c:1M  () (c:HLMODE))
+
+;;; TOGGLE-HLMODE-1-2 (1X): Rapid toggle between Mode 1 (Lines) and Mode 2 (Xlines)
+(defun c:TOGGLE-HLMODE-1-2 ( / lay desc )
+  (if (null *HLMODE*) (setq *HLMODE* 1))
+  ;; If in Mode 2, toggle to 1; if in Mode 1 or 0, toggle to 2 (or 1 if 0)
+  (setq *HLMODE* (cond ((= *HLMODE* 2) 1)
+                       ((= *HLMODE* 1) 2)
+                       (t 1))
+        lay      (if *WF-LAYER-HL* *WF-LAYER-HL* "01-HELP-LINE"))
+  (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
+  (CadSetup:HL-SolveLayer lay)
+  (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+  (setq desc (if (= *HLMODE* 2) "2 (Infinite Xlines)" "1 (Line Segments)"))
+  (princ (strcat "\n[1X] HLMODE toggled to " desc ". \"" lay "\" refreshed successfully."))
+  (princ)
+)
+
+(defun c:1X () (c:TOGGLE-HLMODE-1-2))
+
+;;; HL-XLINES (XX): Set HLMODE to 2 (Infinite Xlines) and launch HL drafting
+(defun c:HL-XLINES ( / lay )
+  (setq *HLMODE* 2
+        lay      (if *WF-LAYER-HL* *WF-LAYER-HL* "01-HELP-LINE"))
+  (if (boundp 'CadSetup:HL-SolveLayer)
+    (CadSetup:HL-SolveLayer lay)
+  )
+  (princ "\n[XX] HLMODE set to 2 (Infinite Xlines).")
+  (c:HL)
+  (princ)
+)
+
+(defun c:XX () (c:HL-XLINES))
+
+;;; --------------------------------------------------------------------------
+;;; MAIN WORKFLOW COMMAND: 1 / HL
+;;; --------------------------------------------------------------------------
+(defun c:HL ( / ss *error* oldLayer oldEcho lay pt1 pt2 history top
+                pEnt promptStr _solveNow )
+  (setq ss  (ssget "_I")
+        lay (if *WF-LAYER-HL* *WF-LAYER-HL* "01-HELP-LINE"))
+  (if (null *HLMODE*) (setq *HLMODE* 1))
+
+  ;; 1. SELECTION ACTIVE (Pickfirst): Extract vertices into guide points & solve
+  (if (and ss (> (sslength ss) 0))
+    (progn
+      (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
+      (CadSetup:HL-ExtractVertices ss lay)
+      (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
       (princ)
     )
+    ;; 2. NO SELECTION: Interactive guide point node drafting with live solver
     (progn
       (defun *error* (msg)
         (if oldEcho  (setvar "CMDECHO" oldEcho))
@@ -69,29 +560,8 @@
         (princ)
       )
 
-      ;; Helper: Create point entity on help layer (translates UCS -> WCS)
-      (defun _mkPoint (p)
-        (entmake
-          (list
-            '(0 . "POINT")
-            (cons 8 lay)
-            (cons 10 (trans p 1 0))
-          )
-        )
-        (entlast)
-      )
-
-      ;; Helper: Create line entity on help layer (translates UCS -> WCS)
-      (defun _mkLine (p1 p2)
-        (entmake
-          (list
-            '(0 . "LINE")
-            (cons 8 lay)
-            (cons 10 (trans p1 1 0))
-            (cons 11 (trans p2 1 0))
-          )
-        )
-        (entlast)
+      (defun _solveNow ()
+        (CadSetup:HL-SolveLayer lay)
       )
 
       (setq oldEcho  (getvar "CMDECHO")
@@ -100,62 +570,88 @@
 
       (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
 
-      ;; Safely set current layer using helper
+      ;; Safely ensure and set current layer to 01-HELP-LINE
       (CadSetup:SetCurrentLayerSafe lay)
 
-      ;; Interactive loop
-      (setq pt1 (getpoint "\nSpecify first point: "))
-      (if pt1
-        (progn
-          ;; Live point on the very first click
-          (setq firstPtEnt (_mkPoint pt1)
-                history    (list (list nil nil firstPtEnt pt1)))
+      ;; Prompt for first guide point (with Mode switch option)
+      (initget "Mode")
+      (setq pt1 (getpoint (strcat "\n[HLMODE=" (itoa *HLMODE*) "] Specify first guide point or [Mode]: ")))
+      (while (= pt1 "Mode")
+        (c:HLMODE)
+        (initget "Mode")
+        (setq pt1 (getpoint (strcat "\n[HLMODE=" (itoa *HLMODE*) "] Specify first guide point or [Mode]: ")))
+      )
 
+      (if (listp pt1)
+        (progn
+          ;; Place point node for first click
+          (setq pEnt    (CadSetup:HL-MkPoint pt1 lay)
+                history (list (list pEnt pt1)))
+          (_solveNow)
+
+          ;; Interactive loop for subsequent guide points
           (while pt1
             (if (> (length history) 1)
-              (initget "Undo Close")
-              (initget "Undo")
+              (initget "Mode Undo Close")
+              (initget "Mode Undo")
             )
-            ;; Native rubber-band line from pt1 to cursor
-            (setq pt2 (getpoint pt1 (if (> (length history) 1)
-                                      "\nSpecify next point or [Close/Undo]: "
-                                      "\nSpecify next point or [Undo]: ")))
+            (setq promptStr (strcat "\n[HLMODE=" (itoa *HLMODE*)
+                                    "] Specify next guide point or ["
+                                    (if (> (length history) 1) "Mode/Undo/Close" "Mode/Undo")
+                                    "]: "))
+            (setq pt2 (getpoint pt1 promptStr))
+
             (cond
-              ;; Undo handling
+              ;; Switch HLMODE mid-command
+              ((= pt2 "Mode")
+               (c:HLMODE)
+               ;; pt1 remains active at the same node
+              )
+
+              ;; Undo handling: delete last placed point entity and re-solve
               ((= pt2 "Undo")
                (setq top     (car history)
                      history (cdr history))
-               (if (cadr top)  (entdel (cadr top)))   ; delete line segment
-               (if (caddr top) (entdel (caddr top)))  ; delete point node
+               (if (car top)
+                 (vl-catch-all-apply 'entdel (list (car top)))
+               )
+               (_solveNow)
                (if history
-                 (setq pt1 (last (car history)))
+                 (setq pt1 (cadr (car history)))
                  (progn
-                   ;; Undid the initial click; prompt for start point again
-                   (setq pt1 (getpoint "\nSpecify first point: "))
-                   (if pt1
-                     (setq firstPtEnt (_mkPoint pt1)
-                           history    (list (list nil nil firstPtEnt pt1)))
+                   ;; All session points undone; prompt for first point again
+                   (initget "Mode")
+                   (setq pt1 (getpoint (strcat "\n[HLMODE=" (itoa *HLMODE*) "] Specify first guide point or [Mode]: ")))
+                   (while (= pt1 "Mode")
+                     (c:HLMODE)
+                     (initget "Mode")
+                     (setq pt1 (getpoint (strcat "\n[HLMODE=" (itoa *HLMODE*) "] Specify first guide point or [Mode]: ")))
+                   )
+                   (if (listp pt1)
+                     (progn
+                       (setq pEnt    (CadSetup:HL-MkPoint pt1 lay)
+                             history (list (list pEnt pt1)))
+                       (_solveNow)
+                     )
                    )
                  )
                )
               )
 
-              ;; Close polygon handling
+              ;; Close handling: cleanly finish
               ((= pt2 "Close")
-               (setq startPt (last (last history)))
-               (_mkLine pt1 startPt)
                (setq pt1 nil)
               )
 
-              ;; Next point picked
+              ;; User clicked next guide point
               ((listp pt2)
-               (setq lEnt (_mkLine pt1 pt2)
-                     pEnt (_mkPoint pt2))
-               (setq history (cons (list pt1 lEnt pEnt pt2) history))
-               (setq pt1 pt2)
+               (setq pEnt    (CadSetup:HL-MkPoint pt2 lay)
+                     history (cons (list pEnt pt2) history)
+                     pt1     pt2)
+               (_solveNow)
               )
 
-              ;; Enter / Space / nil to exit
+              ;; Enter / Space / nil / Esc to exit
               (t
                (setq pt1 nil)
               )
@@ -168,7 +664,7 @@
       (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
       (setvar "CMDECHO" oldEcho)
 
-      (princ (strcat "\n[HL] Completed. Restored layer: " oldLayer))
+      (princ (strcat "\n[HL] Completed (HLMODE=" (itoa *HLMODE*) "). Restored layer: " oldLayer))
       (princ)
     )
   )

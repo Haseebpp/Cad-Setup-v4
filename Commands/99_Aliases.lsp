@@ -344,6 +344,9 @@
 
 ;;; --- LAYER & VISIBILITY TOGGLES --------------------------------------------
 (defun c:/   () (c:TOGGLE-HELP-LINE)) ; /   -> Toggle 01-HELP-LINE layer ON/OFF
+(defun c:1M  () (c:HLMODE))           ; 1M  -> Switch Help Line Mode (0=Points, 1=Lines, 2=Xlines)
+(defun c:1X  () (c:TOGGLE-HLMODE-1-2)); 1X  -> Toggle Help Line Mode between 1 (Lines) and 2 (Xlines)
+(defun c:XX  () (c:HL-XLINES))        ; XX  -> Set HLMODE to 2 (Xlines) and start Help Line drafting
 
 ;;; ==========================================================================
 ;;; FUTURE DRAFTING ALIASES TEMPLATE (USER-EXTENSIBLE)

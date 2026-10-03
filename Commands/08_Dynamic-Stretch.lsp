@@ -7,11 +7,12 @@
 ;;; ==========================================================================
 ;;; ARCHITECTURAL NOTE:
 ;;; Advanced stretching engine featuring 60 FPS live interactive preview:
-;;;   1. Multi-boundary box selection with multi-color palette (Green, Cyan,
-;;;      Magenta, Yellow, Red, Blue) and architectural HUD viewfinder brackets.
+;;;   1. Multi-boundary box selection with single red dotted outline and 80%
+;;;      transparent green solid fill during dragging (MEASURE AREA aesthetic),
+;;;      transitioning to clean thick red wireframe borders upon finalization.
 ;;;   2. Entity-level native highlight glowing (redraw ent 3) on candidate blocks.
 ;;;   3. LIVE interactive preview during point picking & direction displacement:
-;;;      - Real-time yellow vector arrow tracking from base point to cursor.
+;;;      - Real-time vibrant green vector arrow tracking from red box centers to green box centers.
 ;;;      - Opposing pair blocks: Live dynamic green dual-headed arrows &
 ;;;        real-time deformed ghost boundaries showing active expansion.
 ;;;      - Single linear blocks: Live dynamic yellow directional arrows &
@@ -34,18 +35,165 @@
 (vl-load-com)
 
 ;;; ==========================================================================
-;;; 1. VISUALIZATION SYSTEM: MULTI-COLOR PALETTES, HUD BRACKETS & ARROWS
+;;; 1. VISUALIZATION SYSTEM: RED DOTTED BORDER, 80% TRANSPARENT SOLID GREEN FILL
+;;;    AND THICK RED WIREFRAME BOXES (MEASURE AREA AESTHETIC)
 ;;; ==========================================================================
 
-;; Helper: Multi-color palette for sequential crossing boxes
-;; Palette: 3=Green, 4=Cyan, 6=Magenta, 2=Yellow, 1=Red, 5=Blue, 30=Orange
-(defun dstr:get-box-color (idx / colors)
-  (setq colors '(3 4 6 2 1 5 30))
-  (nth (rem idx (length colors)) colors))
+;; Global handle to active temporary dragging solid entity (for safe cleanup)
+(setq dstr:*active-temp-solid* nil)
+;; Global pointer to ModelSpace sort table for high-performance draw order management
+(setq dstr:*active-sort-table* nil)
 
-;; Helper: Draw precision HUD boundary box with corner viewfinders & crossing pattern
-(defun dstr:draw-box (p1 p2 col idx / x1 x2 y1 y2 dx dy pa pb pc pd
-                                      bLen mx my mLen)
+;; Helper: Safely bring temporary entity to the absolute front of draw order (ActiveX only, no command calls)
+(defun dstr:bring-to-front (enm / vObj doc mSpace extDict arr)
+  (if (and enm (setq vObj (vl-catch-all-apply 'vlax-ename->vla-object (list enm))))
+    (if (not (vl-catch-all-error-p vObj))
+      (vl-catch-all-apply
+        (function
+          (lambda ()
+            (if (or (null dstr:*active-sort-table*)
+                    (vl-catch-all-error-p dstr:*active-sort-table*))
+              (progn
+                (setq doc     (vla-get-activedocument (vlax-get-acad-object))
+                      mSpace  (vla-get-modelspace doc)
+                      extDict (vla-GetExtensionDictionary mSpace))
+                (setq dstr:*active-sort-table*
+                  (vl-catch-all-apply 'vla-Item (list extDict "ACAD_SORTENTS")))
+                (if (or (vl-catch-all-error-p dstr:*active-sort-table*)
+                        (null dstr:*active-sort-table*))
+                  (setq dstr:*active-sort-table*
+                    (vl-catch-all-apply 'vla-AddObject (list extDict "ACAD_SORTENTS" "AcDbSortentsTable"))))))
+            (if (and dstr:*active-sort-table*
+                     (not (vl-catch-all-error-p dstr:*active-sort-table*)))
+              (progn
+                (setq arr (vlax-make-safearray vlax-vbObject '(0 . 0)))
+                (vlax-safearray-fill arr (list vObj))
+                (vla-MoveToTop dstr:*active-sort-table* arr)))))))))
+
+;; Helper: Draw single red color dotted line between two points in UCS
+(defun dstr:draw-dotted-line (p1 p2 col / d ang seg-len num-segs i t1 t2)
+  (setq d (distance p1 p2))
+  (if (> d 1e-4)
+    (progn
+      (setq ang      (angle p1 p2)
+            seg-len  (max (* (getvar "VIEWSIZE") 0.015) 1e-4)
+            num-segs (fix (/ d seg-len)))
+      (if (< num-segs 2)
+        (grdraw p1 p2 col 1)
+        (progn
+          (setq i 0)
+          (while (< i num-segs)
+            (setq t1 (polar p1 ang (* i seg-len))
+                  t2 (polar p1 ang (* (+ i 0.5) seg-len)))
+            (grdraw t1 t2 col 1)
+            (setq i (1+ i)))
+          ;; Ensure corner is cleanly terminated
+          (grdraw (polar p1 ang (* (1- num-segs) seg-len)) p2 col 1))))))
+
+;; Helper: Create temporary 2D SOLID with 80% transparency and ACI Color 3 (Bright Green)
+;; Matches AutoCAD's native MEASURE AREA & translucent crossing selection window
+(defun dstr:create-temp-solid (p1 p2 / x1 x2 y1 y2 w1 w2 w3 w4 elist enm z)
+  (setq x1 (min (car p1) (car p2))
+        x2 (max (car p1) (car p2))
+        y1 (min (cadr p1) (cadr p2))
+        y2 (max (cadr p1) (cadr p2))
+        z  (if (and (caddr p1) (numberp (caddr p1))) (caddr p1) 0.0))
+  (if (and (> (- x2 x1) 1e-4) (> (- y2 y1) 1e-4))
+    (progn
+      ;; Convert UCS corner points to WCS
+      (setq w1 (trans (list x1 y1 z) 1 0)   ; Bottom-Left
+            w2 (trans (list x2 y1 z) 1 0)   ; Bottom-Right
+            w3 (trans (list x1 y2 z) 1 0)   ; Top-Left
+            w4 (trans (list x2 y2 z) 1 0))  ; Top-Right
+      ;; DXF Group 440: 33554483 = 0x02000033 (80% transparency: alpha = 51 = 0x33)
+      (setq elist
+        (list
+          '(0 . "SOLID")
+          '(100 . "AcDbEntity")
+          '(8 . "0")
+          '(62 . 3)                   ; Color 3 = Bright Green
+          '(440 . 33554483)           ; 80% Transparency
+          '(100 . "AcDbTrace")
+          (cons 10 w1)
+          (cons 11 w2)
+          (cons 12 w3)
+          (cons 13 w4)))
+      (setq enm (vl-catch-all-apply 'entmakex (list elist)))
+      (if (or (vl-catch-all-error-p enm) (null enm))
+        ;; Fallback if group 440 is rejected by legacy AutoCAD
+        (setq enm (vl-catch-all-apply 'entmakex
+                    (list
+                      (list
+                        '(0 . "SOLID")
+                        '(8 . "0")
+                        '(62 . 3)
+                        (cons 10 w1)
+                        (cons 11 w2)
+                        (cons 12 w3)
+                        (cons 13 w4))))))
+      (if (and enm (not (vl-catch-all-error-p enm)))
+        (progn
+          ;; Ensure ActiveX transparency is applied if supported
+          (vl-catch-all-apply
+            (function
+              (lambda ()
+                (vla-put-EntityTransparency (vlax-ename->vla-object enm) "80"))))
+          ;; Bring to absolute front of draw order so it sits over all existing drawing entities
+          (dstr:bring-to-front enm)
+          enm)
+        nil))))
+
+;; Helper: Update temporary 2D SOLID coordinates in real-time during mouse drag
+(defun dstr:update-temp-solid (enm p1 p2 / x1 x2 y1 y2 w1 w2 w3 w4 elist z)
+  (if (and enm (entget enm))
+    (progn
+      (setq x1 (min (car p1) (car p2))
+            x2 (max (car p1) (car p2))
+            y1 (min (cadr p1) (cadr p2))
+            y2 (max (cadr p1) (cadr p2))
+            z  (if (and (caddr p1) (numberp (caddr p1))) (caddr p1) 0.0))
+      (if (and (> (- x2 x1) 1e-4) (> (- y2 y1) 1e-4))
+        (progn
+          (setq w1 (trans (list x1 y1 z) 1 0)
+                w2 (trans (list x2 y1 z) 1 0)
+                w3 (trans (list x1 y2 z) 1 0)
+                w4 (trans (list x2 y2 z) 1 0))
+          (setq elist (entget enm))
+          (if (assoc 10 elist) (setq elist (subst (cons 10 w1) (assoc 10 elist) elist)))
+          (if (assoc 11 elist) (setq elist (subst (cons 11 w2) (assoc 11 elist) elist)))
+          (if (assoc 12 elist) (setq elist (subst (cons 12 w3) (assoc 12 elist) elist)))
+          (if (assoc 13 elist) (setq elist (subst (cons 13 w4) (assoc 13 elist) elist)))
+          (entmod elist)
+          (entupd enm)
+          ;; Keep entity consistently in front of all drawing objects
+          (dstr:bring-to-front enm))))))
+
+;; Helper: Safely delete temporary 2D SOLID entity
+(defun dstr:delete-temp-solid (enm)
+  (if (and enm (entget enm))
+    (vl-catch-all-apply 'entdel (list enm))))
+
+;; Helper: Draw active dragging window border (single red dotted border in UCS)
+(defun dstr:draw-dragging-box (p1 p2 / x1 x2 y1 y2 pa pb pc pd)
+  (setq x1 (min (car p1) (car p2))
+        x2 (max (car p1) (car p2))
+        y1 (min (cadr p1) (cadr p2))
+        y2 (max (cadr p1) (cadr p2)))
+  (setq pa (list x1 y1 0.0)
+        pb (list x2 y1 0.0)
+        pc (list x2 y2 0.0)
+        pd (list x1 y2 0.0))
+
+  ;; Single red dotted boundary lines (Color 1 = Red)
+  (dstr:draw-dotted-line pa pb 1)
+  (dstr:draw-dotted-line pb pc 1)
+  (dstr:draw-dotted-line pc pd 1)
+  (dstr:draw-dotted-line pd pa 1))
+
+;; Helper: Draw created selection window with thick bold red border in UCS (no multicolor)
+(defun dstr:draw-thick-box (p1 p2 col / x1 x2 y1 y2 dx dy pa pb pc pd
+                                         off pa1 pb1 pc1 pd1 pa2 pb2 pc2 pd2
+                                         bLen)
   (setq x1 (min (car p1) (car p2))
         x2 (max (car p1) (car p2))
         y1 (min (cadr p1) (cadr p2))
@@ -57,55 +205,232 @@
         pc (list x2 y2 0.0)
         pd (list x1 y2 0.0))
 
-  ;; 1. Primary outer boundary rectangle (highlighted)
-  (grdraw pa pb col 1)
-  (grdraw pb pc col 1)
-  (grdraw pc pd col 1)
-  (grdraw pd pa col 1)
+  ;; Multi-stroke thick red border simulation (Color 1 = Red)
+  (setq off (max (* (getvar "VIEWSIZE") 0.0025) 1e-4))
+  (setq pa1 (list (+ x1 off) (+ y1 off) 0.0)
+        pb1 (list (- x2 off) (+ y1 off) 0.0)
+        pc1 (list (- x2 off) (- y2 off) 0.0)
+        pd1 (list (+ x1 off) (- y2 off) 0.0))
+  (setq pa2 (list (- x1 off) (- y1 off) 0.0)
+        pb2 (list (+ x2 off) (- y1 off) 0.0)
+        pc2 (list (+ x2 off) (+ y2 off) 0.0)
+        pd2 (list (- x1 off) (+ y2 off) 0.0))
 
-  ;; 2. Crossing diagonals (AutoCAD Crossing Window indicator)
+  ;; 1. Center main border (Red)
+  (grdraw pa pb 1 1)
+  (grdraw pb pc 1 1)
+  (grdraw pc pd 1 1)
+  (grdraw pd pa 1 1)
+
+  ;; 2. Inner stroke (Red)
+  (grdraw pa1 pb1 1 1)
+  (grdraw pb1 pc1 1 1)
+  (grdraw pc1 pd1 1 1)
+  (grdraw pd1 pa1 1 1)
+
+  ;; 3. Outer stroke (Red)
+  (grdraw pa2 pb2 1 1)
+  (grdraw pb2 pc2 1 1)
+  (grdraw pc2 pd2 1 1)
+  (grdraw pd2 pa2 1 1)
+
+  ;; 4. Corner ticks in red
   (if (and (> dx 1e-4) (> dy 1e-4))
     (progn
-      (grdraw pa pc col 0)
-      (grdraw pb pd col 0)
-
-      ;; 3. Architectural corner bracket viewfinders
-      (setq bLen (min (* (min dx dy) 0.15) (* (getvar "VIEWSIZE") 0.035)))
+      (setq bLen (min (* (min dx dy) 0.12) (* (getvar "VIEWSIZE") 0.035)))
       (if (> bLen 1e-4)
         (progn
-          ;; pa corner (bottom-left)
+          (grdraw pa (list (+ x1 bLen) y1 0.0) 1 1)
+          (grdraw pa (list x1 (+ y1 bLen) 0.0) 1 1)
+          (grdraw pb (list (- x2 bLen) y1 0.0) 1 1)
+          (grdraw pb (list x2 (+ y1 bLen) 0.0) 1 1)
+          (grdraw pc (list (- x2 bLen) y2 0.0) 1 1)
+          (grdraw pc (list x2 (- y2 bLen) 0.0) 1 1)
+          (grdraw pd (list (+ x1 bLen) y2 0.0) 1 1)
+          (grdraw pd (list x1 (- y2 bLen) 0.0) 1 1))))))
+
+;; Helper: Draw only the highlighted corner L-marks of a bounding box in UCS
+(defun dstr:draw-box-corners (p1 p2 col highlight / x1 x2 y1 y2 dx dy bLen pa pb pc pd)
+  (setq x1 (min (car p1) (car p2))
+        x2 (max (car p1) (car p2))
+        y1 (min (cadr p1) (cadr p2))
+        y2 (max (cadr p1) (cadr p2))
+        dx (- x2 x1)
+        dy (- y2 y1))
+  (if (and (> dx 1e-4) (> dy 1e-4))
+    (progn
+      (setq pa (list x1 y1 0.0)
+            pb (list x2 y1 0.0)
+            pc (list x2 y2 0.0)
+            pd (list x1 y2 0.0)
+            bLen (min (* (min dx dy) 0.12) (* (getvar "VIEWSIZE") 0.035)))
+      (if (> bLen 1e-4)
+        (progn
+          (grdraw pa (list (+ x1 bLen) y1 0.0) col highlight)
+          (grdraw pa (list x1 (+ y1 bLen) 0.0) col highlight)
+          (grdraw pb (list (- x2 bLen) y1 0.0) col highlight)
+          (grdraw pb (list x2 (+ y1 bLen) 0.0) col highlight)
+          (grdraw pc (list (- x2 bLen) y2 0.0) col highlight)
+          (grdraw pc (list x2 (- y2 bLen) 0.0) col highlight)
+          (grdraw pd (list (+ x1 bLen) y2 0.0) col highlight)
+          (grdraw pd (list x1 (- y2 bLen) 0.0) col highlight))))))
+
+;; Helper: Draw moving selection window box (thin perimeter in mode 0 + highlighted corner marks in mode 1)
+(defun dstr:draw-moving-box (p1 p2 dx dy col / x1 x2 y1 y2 w-dx w-dy pa pb pc pd bLen)
+  (setq x1 (+ (min (car p1) (car p2)) dx)
+        x2 (+ (max (car p1) (car p2)) dx)
+        y1 (+ (min (cadr p1) (cadr p2)) dy)
+        y2 (+ (max (cadr p1) (cadr p2)) dy)
+        w-dx (- x2 x1)
+        w-dy (- y2 y1))
+  (setq pa (list x1 y1 0.0)
+        pb (list x2 y1 0.0)
+        pc (list x2 y2 0.0)
+        pd (list x1 y2 0.0))
+
+  ;; 1. Normal thin green perimeter line (Color = col, highlight = 0)
+  (grdraw pa pb col 0)
+  (grdraw pb pc col 0)
+  (grdraw pc pd col 0)
+  (grdraw pd pa col 0)
+
+  ;; 2. Highlighted green corner marks (Color = col, highlight = 1)
+  (if (and (> w-dx 1e-4) (> w-dy 1e-4))
+    (progn
+      (setq bLen (min (* (min w-dx w-dy) 0.12) (* (getvar "VIEWSIZE") 0.035)))
+      (if (> bLen 1e-4)
+        (progn
           (grdraw pa (list (+ x1 bLen) y1 0.0) col 1)
           (grdraw pa (list x1 (+ y1 bLen) 0.0) col 1)
-          ;; pb corner (bottom-right)
           (grdraw pb (list (- x2 bLen) y1 0.0) col 1)
           (grdraw pb (list x2 (+ y1 bLen) 0.0) col 1)
-          ;; pc corner (top-right)
           (grdraw pc (list (- x2 bLen) y2 0.0) col 1)
           (grdraw pc (list x2 (- y2 bLen) 0.0) col 1)
-          ;; pd corner (top-left)
           (grdraw pd (list (+ x1 bLen) y2 0.0) col 1)
-          (grdraw pd (list x1 (- y2 bLen) 0.0) col 1)
+          (grdraw pd (list x1 (- y2 bLen) 0.0) col 1))))))
 
-          ;; 4. Midpoint edge notch markers
-          (setq mx   (* 0.5 (+ x1 x2))
-                my   (* 0.5 (+ y1 y2))
-                mLen (* 0.4 bLen))
-          (grdraw (list (- mx mLen) y1 0.0) (list (+ mx mLen) y1 0.0) col 1)
-          (grdraw (list (- mx mLen) y2 0.0) (list (+ mx mLen) y2 0.0) col 1)
-          (grdraw (list x1 (- my mLen) 0.0) (list x1 (+ my mLen) 0.0) col 1)
-          (grdraw (list x2 (- my mLen) 0.0) (list x2 (+ my mLen) 0.0) col 1)
-        )
-      )
-    )
-  )
-)
+;; Helper: Draw created selection window with light single-line red border & corner marks (Color 1)
+;; Used after window creation is complete, while waiting for base point selection
+(defun dstr:draw-light-box (p1 p2 col / x1 x2 y1 y2 pa pb pc pd)
+  (setq x1 (min (car p1) (car p2))
+        x2 (max (car p1) (car p2))
+        y1 (min (cadr p1) (cadr p2))
+        y2 (max (cadr p1) (cadr p2)))
+  (setq pa (list x1 y1 0.0)
+        pb (list x2 y1 0.0)
+        pc (list x2 y2 0.0)
+        pd (list x1 y2 0.0))
 
-;; Helper: Redraw all active boundary boxes in multi-color palette
-(defun dstr:draw-all-boxes (box-list / i box)
-  (setq i 0)
+  ;; 1. Light single-line red perimeter border (Color 1 = Red, highlight = 0)
+  (grdraw pa pb col 0)
+  (grdraw pb pc col 0)
+  (grdraw pc pd col 0)
+  (grdraw pd pa col 0)
+
+  ;; 2. Highlighted corner marks in red (Color 1 = Red, highlight = 1)
+  (dstr:draw-box-corners p1 p2 col 1))
+
+;; Helper: Redraw all created boundary boxes with thick red borders (window creation phase)
+(defun dstr:draw-all-boxes (box-list / box)
   (foreach box box-list
-    (dstr:draw-box (car box) (cadr box) (dstr:get-box-color i) (1+ i))
-    (setq i (1+ i))))
+    (dstr:draw-thick-box (car box) (cadr box) 1)))
+
+;; Helper: Redraw all boundary boxes with light red single-line borders & corner marks (waiting for base point)
+(defun dstr:draw-all-boxes-light (box-list / box)
+  (foreach box box-list
+    (dstr:draw-light-box (car box) (cadr box) 1)))
+
+;; Helper: Render selection boxes and center-to-center vector arrows during displacement phase:
+;; - Anchored original position: Red corner marks (Color 1) + Red Center Anchor Cross (Color 1)
+;; - Moving position: Bright green box (Color 3) with corner marks translated by (dx, dy)
+;; - Center-to-center vector: Vibrant green arrow (Color 3) connecting red box center to green box center
+(defun dstr:draw-displacement-boxes (box-list dx dy / box p1 p2 c-orig c-mov cLen d)
+  (setq cLen (max (* (getvar "VIEWSIZE") 0.015) 1e-4)
+        d    (sqrt (+ (* dx dx) (* dy dy))))
+  (foreach box box-list
+    (setq p1 (car box)
+          p2 (cadr box))
+    (setq c-orig (list (* 0.5 (+ (car p1) (car p2)))
+                       (* 0.5 (+ (cadr p1) (cadr p2)))
+                       0.0)
+          c-mov  (list (+ (car c-orig) dx)
+                       (+ (cadr c-orig) dy)
+                       0.0))
+
+    ;; 1. Anchored original position: Red corner L-marks (highlight 1)
+    (dstr:draw-box-corners p1 p2 1 1)
+
+    ;; 2. Anchored original position: Red center anchor cross (+) (highlight 1)
+    (grdraw (list (- (car c-orig) cLen) (cadr c-orig) 0.0)
+            (list (+ (car c-orig) cLen) (cadr c-orig) 0.0) 1 1)
+    (grdraw (list (car c-orig) (- (cadr c-orig) cLen) 0.0)
+            (list (car c-orig) (+ (cadr c-orig) cLen) 0.0) 1 1)
+
+    ;; 3. Moving position: Bright green thin perimeter (mode 0) + green corner marks (mode 1)
+    (dstr:draw-moving-box p1 p2 dx dy 3)
+
+    ;; 4. Vibrant bright green vector arrow from red box center to green box center
+    (if (> d 1e-4)
+      (dstr:draw-arrow c-orig c-mov 3))))
+
+;; Helper: Interactive corner picking loop with single red dotted border & 80% transparent green solid fill
+(defun dstr:pick-corner (pt1 existing-boxes / loop gr code val cur-pt pt2 temp-solid)
+  (setq loop       t
+        pt2        nil
+        cur-pt     pt1
+        temp-solid nil)
+  (setq dstr:*active-temp-solid* nil)
+  (princ "\nSpecify opposite corner [Red Dotted / 80% Transparent Green Active]: ")
+  (while loop
+    (setq gr (grread t 15 0))
+    (setq code (car gr)
+          val  (cadr gr))
+    (cond
+      ;; Mouse move: code = 5
+      ((= code 5)
+       (setq cur-pt val)
+       ;; 1. Update or create the transparent solid green fill (MEASURE AREA style)
+       (if (and (null temp-solid)
+                (> (abs (- (car cur-pt) (car pt1))) 1e-4)
+                (> (abs (- (cadr cur-pt) (cadr pt1))) 1e-4))
+         (setq temp-solid               (dstr:create-temp-solid pt1 cur-pt)
+               dstr:*active-temp-solid* temp-solid)
+         (if temp-solid
+           (dstr:update-temp-solid temp-solid pt1 cur-pt)))
+       ;; 2. Clear transient overlay vectors & redraw all created boxes (thick red wireframe)
+       (redraw)
+       (dstr:draw-all-boxes existing-boxes)
+       ;; 3. Draw live active dragging border with single red dotted line on top
+       (dstr:draw-dragging-box pt1 cur-pt))
+
+      ;; Left click: code = 3
+      ((= code 3)
+       (setq pt2  val
+             loop nil))
+
+      ;; Esc: code = 2, val = 27
+      ((and (= code 2) (= val 27))
+       (setq pt2  nil
+             loop nil))
+
+      ;; Enter / Space: code = 2, val = 13 or 32
+      ((and (= code 2) (or (= val 13) (= val 32)))
+       (setq pt2  cur-pt
+             loop nil))
+
+      ;; Right click: code = 11 or 25
+      ((or (= code 11) (= code 25))
+       (setq pt2  cur-pt
+             loop nil))))
+
+  ;; Cleanup: Immediately delete temporary transparent solid fill upon corner selection or cancel
+  (if temp-solid
+    (progn
+      (dstr:delete-temp-solid temp-solid)
+      (setq temp-solid               nil
+            dstr:*active-temp-solid* nil)))
+  (redraw)
+  pt2)
 
 ;; Helper: Draw 2D Vector Arrow in UCS with closed barb head
 (defun dstr:draw-arrow (p1 p2 col / d ang head-len a1 a2 w1 w2)
@@ -140,18 +465,66 @@
   (grdraw (list (car p3) (- (cadr p3) len) 0.0) (list (car p3) (+ (cadr p3) len) 0.0) col 0)
 )
 
-;; Helper: Draw deformed ghost rectangle along active expansion axis
-(defun dstr:draw-deformed-ghost (corners ux uy delta col / s-list s-mid new-pts p1 p2 p3 p4 pt s)
+;; Helper: Draw live deformed stretch ghost bounding box in UCS
+;; corners : List of 4 2D/3D corner points of the block envelope
+;; ux, uy  : Unit vector of the parameter extension axis
+;; dx, dy  : Real-time cursor displacement vector from base-pt to cur-pt
+;; end-type: 'mov (moving end in box, base fixed) or 'base (base end in box, far end fixed)
+;; col     : Color index
+(defun dstr:draw-stretch-ghost (corners ux uy dx dy end-type col /
+                                s-list s-min s-max s-mid delta
+                                perp-x perp-y new-pts p1 p2 p3 p4 s
+                                len fix-pts fix-p1 fix-p2 fix-mid)
+  ;; Dot product projection along axis: delta = dx*ux + dy*uy
+  (setq delta (+ (* dx ux) (* dy uy)))
+
+  ;; Transverse component: perp = displacement perpendicular to parameter axis
+  (setq perp-x (- dx (* delta ux))
+        perp-y (- dy (* delta uy)))
+
+  ;; Evaluate projections of all 4 corners onto parameter axis
   (setq s-list (mapcar '(lambda (p) (+ (* (car p) ux) (* (cadr p) uy))) corners))
-  (setq s-mid  (* 0.5 (+ (apply 'min s-list) (apply 'max s-list))))
+  (setq s-min  (apply 'min s-list)
+        s-max  (apply 'max s-list)
+        s-mid  (* 0.5 (+ s-min s-max)))
+
+  ;; Compute new deformed coordinates for all 4 corners
   (setq new-pts
     (mapcar
       '(lambda (p)
          (setq s (+ (* (car p) ux) (* (cadr p) uy)))
-         (if (> s s-mid)
-           (list (+ (car p) (* delta ux)) (+ (cadr p) (* delta uy)) 0.0)
-           (list (car p) (cadr p) 0.0)))
+         (cond
+           ;; Case 1: Moving End is being stretched ('mov)
+           ;; Base end (s <= s-mid) stays 100% pinned at original coordinate
+           ;; Far end (s > s-mid) extends along axis by delta
+           ((eq end-type 'mov)
+            (if (> s s-mid)
+              (list (+ (car p) (* delta ux))
+                    (+ (cadr p) (* delta uy))
+                    0.0)
+              (list (car p) (cadr p) 0.0)))
+
+           ;; Case 2: Base End is being stretched ('base)
+           ;; Far end (s > s-mid) stays pinned along stretch axis (only moves by transverse perp if any)
+           ;; Base end (s <= s-mid) moves with the crossing window by (dx, dy)
+           ((eq end-type 'base)
+            (if (<= s s-mid)
+              ;; Base end moves by full displacement (dx, dy)
+              (list (+ (car p) dx)
+                    (+ (cadr p) dy)
+                    0.0)
+              ;; Far end stays pinned along stretch axis (only transverse shift if any)
+              (list (+ (car p) perp-x)
+                    (+ (cadr p) perp-y)
+                    0.0)))
+
+           ;; Fallback: default to un-deformed
+           (t (list (car p) (cadr p) 0.0))
+         )
+      )
       corners))
+
+  ;; Draw the 4 edges of the deformed ghost rectangle
   (setq p1 (nth 0 new-pts)
         p2 (nth 1 new-pts)
         p3 (nth 2 new-pts)
@@ -160,9 +533,36 @@
   (grdraw p2 p3 col 1)
   (grdraw p3 p4 col 1)
   (grdraw p4 p1 col 1)
-  ;; Subtle crossing diagonals on ghost
+
+  ;; Draw crossing diagonals on ghost window
   (grdraw p1 p3 col 0)
   (grdraw p2 p4 col 0)
+
+  ;; Draw anchor crosshair on the fixed/pinned side to make the stretch crystal clear
+  (setq len (* (getvar "VIEWSIZE") 0.015))
+  (setq fix-pts
+    (vl-remove nil
+      (mapcar
+        '(lambda (p orig-p)
+           (setq s (+ (* (car orig-p) ux) (* (cadr orig-p) uy)))
+           (cond
+             ((eq end-type 'mov)  (if (<= s s-mid) p nil))
+             ((eq end-type 'base) (if (> s s-mid) p nil))
+             (t nil)))
+        new-pts corners)))
+  (if (= (length fix-pts) 2)
+    (progn
+      (setq fix-p1  (nth 0 fix-pts)
+            fix-p2  (nth 1 fix-pts)
+            fix-mid (list (* 0.5 (+ (car fix-p1) (car fix-p2)))
+                          (* 0.5 (+ (cadr fix-p1) (cadr fix-p2)))
+                          0.0))
+      (grdraw (list (- (car fix-mid) len) (cadr fix-mid) 0.0)
+              (list (+ (car fix-mid) len) (cadr fix-mid) 0.0) col 1)
+      (grdraw (list (car fix-mid) (- (cadr fix-mid) len) 0.0)
+              (list (car fix-mid) (+ (cadr fix-mid) len) 0.0) col 1)
+    )
+  )
 )
 
 ;;; ==========================================================================
@@ -246,9 +646,9 @@
          ;; Ghost bounding box showing active stretch deformation
          (cond
            ((and movInA (not baseInA))
-            (dstr:draw-deformed-ghost corners uX uY delta 3))
+            (dstr:draw-stretch-ghost corners uX uY dx dy 'mov 3))
            ((and movInB (not baseInB))
-            (dstr:draw-deformed-ghost corners (- uX) (- uY) (- delta) 3))
+            (dstr:draw-stretch-ghost corners (- uX) (- uY) dx dy 'mov 3))
          )
        )
 
@@ -266,17 +666,21 @@
                s-baseIn(cadr s-res))
 
          ;; Live single arrow along axis
-         (setq vPt1 (list (+ cx (* (+ arrow-len (max 0.0 s-delta)) sux))
-                          (+ cy (* (+ arrow-len (max 0.0 s-delta)) suy))
-                          0.0))
+         (if (and s-baseIn (not s-movIn))
+           (setq vPt1 (list (+ cx (* (+ arrow-len (max 0.0 (- s-delta))) (- sux)))
+                            (+ cy (* (+ arrow-len (max 0.0 (- s-delta))) (- suy)))
+                            0.0))
+           (setq vPt1 (list (+ cx (* (+ arrow-len (max 0.0 s-delta)) sux))
+                            (+ cy (* (+ arrow-len (max 0.0 s-delta)) suy))
+                            0.0)))
          (dstr:draw-arrow (list cx cy 0.0) vPt1 2)
 
-         ;; Ghost bounding box showing deformation or base shift
+         ;; Ghost bounding box showing deformation or base stretch
          (cond
            ((and s-movIn (not s-baseIn))
-            (dstr:draw-deformed-ghost corners sux suy s-delta 2))
+            (dstr:draw-stretch-ghost corners sux suy dx dy 'mov 2))
            ((and s-baseIn (not s-movIn))
-            (dstr:draw-ghost-box corners dx dy 2))
+            (dstr:draw-stretch-ghost corners sux suy dx dy 'base 2))
          )
        )
       )
@@ -294,6 +698,12 @@
         cur-pt    base-pt)
 
   (princ "\nSpecify second point [Live Viewfinder Preview Active] (or type distance): ")
+
+  ;; Immediate initial frame upon clicking base point:
+  ;; Converts from light red box to stationary red corner marks + bright green moving box at (0, 0)
+  (redraw)
+  (dstr:draw-displacement-boxes box-list 0.0 0.0)
+  (dstr:render-live-blocks detected-data box-list 0.0 0.0)
 
   (while loop
     (setq gr (grread t 15 0))
@@ -314,11 +724,7 @@
 
        ;; 3. Redraw screen vectors at 60 FPS
        (redraw)
-       (dstr:draw-all-boxes box-list)
-       (if (> (distance base-pt cur-pt) 1e-4)
-         (dstr:draw-arrow (list (car base-pt) (cadr base-pt) 0.0)
-                          (list (car cur-pt) (cadr cur-pt) 0.0)
-                          2)) ; Yellow displacement arrow
+       (dstr:draw-displacement-boxes box-list dx dy)
        (dstr:render-live-blocks detected-data box-list dx dy)
 
        ;; 4. Real-time HUD readout in AutoCAD status line
@@ -648,7 +1054,7 @@
 ;;; ==========================================================================
 ;;; 4. MAIN COMMAND: DYNSTRETCH / DYNAMICSTRETCH
 ;;; ==========================================================================
-(defun c:DYNSTRETCH ( / *error* old-echo old-osmode doc pt1 pt2 p-next p-next2
+(defun c:DYNSTRETCH ( / *error* old-echo old-osmode old-transp old-drawctl doc pt1 pt2 p-next p-next2
                         ucs-min ucs-max box-list continue base-pt dest-pt
                         dx dy ss-all-blocks ss-box ss-other ss-blocks
                         bmin bmax k ent obj count-blocks highlighted-ents
@@ -662,8 +1068,15 @@
   ;; Error Handler & Stack Reset
   (defun *error* (msg)
     (vl-catch-all-apply 'grtext (list -1 ""))
-    (if old-echo   (setvar "CMDECHO" old-echo))
-    (if old-osmode (setvar "OSMODE"  old-osmode))
+    ;; Safely delete temporary solid if still alive
+    (if (and dstr:*active-temp-solid* (entget dstr:*active-temp-solid*))
+      (vl-catch-all-apply 'entdel (list dstr:*active-temp-solid*)))
+    (setq dstr:*active-temp-solid* nil
+          dstr:*active-sort-table* nil)
+    (if old-drawctl (setvar "DRAWORDERCTL" old-drawctl))
+    (if old-transp  (setvar "TRANSPARENCYDISPLAY" old-transp))
+    (if old-echo    (setvar "CMDECHO" old-echo))
+    (if old-osmode  (setvar "OSMODE"  old-osmode))
     ;; Unhighlight all glowing candidate entities
     (if highlighted-ents
       (foreach ent highlighted-ents
@@ -684,17 +1097,22 @@
   (setq old-echo   (getvar "CMDECHO"))
   (setq old-osmode (getvar "OSMODE"))
   (setvar "CMDECHO" 0)
+  (setq old-transp (getvar "TRANSPARENCYDISPLAY"))
+  (setvar "TRANSPARENCYDISPLAY" 1)
+  (setq old-drawctl (getvar "DRAWORDERCTL"))
+  (setvar "DRAWORDERCTL" 3)
+  (setq dstr:*active-sort-table* nil)
 
   (setq highlighted-ents nil)
 
   ;;-----------------------------------------------------------------------
-  ;; 1. User Prompts: Boundary Box(es) with Multi-Color HUD Viewfinders
+  ;; 1. User Prompts: Boundary Box(es) with Red Dotted / Green Fill Dragging
   ;;-----------------------------------------------------------------------
   (setq box-list nil)
   (setq pt1 (getpoint "\nSpecify first corner of crossing window (or Enter to finish): "))
   (if pt1
     (progn
-      (setq pt2 (getcorner pt1 "\nSpecify opposite corner: "))
+      (setq pt2 (dstr:pick-corner pt1 box-list))
       (if pt2
         (progn
           (setq ucs-min (list (min (car pt1) (car pt2)) (min (cadr pt1) (cadr pt2)) 0.0)
@@ -710,7 +1128,7 @@
                                            "] (or press Enter/Space to proceed): ")))
             (if p-next
               (progn
-                (setq p-next2 (getcorner p-next "\nSpecify opposite corner: "))
+                (setq p-next2 (dstr:pick-corner p-next box-list))
                 (if p-next2
                   (progn
                     (setq ucs-min (list (min (car p-next) (car p-next2)) (min (cadr p-next) (cadr p-next2)) 0.0)
@@ -727,6 +1145,8 @@
       (if (boundp 'CadSetup:UndoEnd)
         (CadSetup:UndoEnd)
         (if doc (vla-endundomark doc)))
+      (if old-drawctl (setvar "DRAWORDERCTL" old-drawctl))
+      (if old-transp  (setvar "TRANSPARENCYDISPLAY" old-transp))
       (setvar "CMDECHO" old-echo)
       (setvar "OSMODE"  old-osmode)
       (redraw))
@@ -751,9 +1171,9 @@
       ;; Pre-analyze blocks for high-performance 60 FPS live preview
       (setq detected-data (dstr:analyze-blocks ss-all-blocks box-list))
 
-      ;; Render static initial HUD overlays while waiting for base point
+      ;; Render static initial HUD overlays while waiting for base point (convert to light boxes)
       (redraw)
-      (dstr:draw-all-boxes box-list)
+      (dstr:draw-all-boxes-light box-list)
       (dstr:render-live-blocks detected-data box-list 0.0 0.0)
 
       (princ (strcat "\n[DYNSTRETCH Visualizer]: "
@@ -772,6 +1192,8 @@
           (if (boundp 'CadSetup:UndoEnd)
             (CadSetup:UndoEnd)
             (if doc (vla-endundomark doc)))
+          (if old-drawctl (setvar "DRAWORDERCTL" old-drawctl))
+          (if old-transp  (setvar "TRANSPARENCYDISPLAY" old-transp))
           (setvar "CMDECHO" old-echo)
           (setvar "OSMODE"  old-osmode)
           (redraw))
@@ -787,6 +1209,8 @@
              (if (boundp 'CadSetup:UndoEnd)
                (CadSetup:UndoEnd)
                (if doc (vla-endundomark doc)))
+             (if old-drawctl (setvar "DRAWORDERCTL" old-drawctl))
+             (if old-transp  (setvar "TRANSPARENCYDISPLAY" old-transp))
              (setvar "CMDECHO" old-echo)
              (setvar "OSMODE"  old-osmode)
              (redraw))
@@ -797,6 +1221,8 @@
              (if (boundp 'CadSetup:UndoEnd)
                (CadSetup:UndoEnd)
                (if doc (vla-endundomark doc)))
+             (if old-drawctl (setvar "DRAWORDERCTL" old-drawctl))
+             (if old-transp  (setvar "TRANSPARENCYDISPLAY" old-transp))
              (setvar "CMDECHO" old-echo)
              (setvar "OSMODE"  old-osmode)
              (redraw))
@@ -928,6 +1354,8 @@
              ;;-----------------------------------------------------------------------
              (setvar "OSMODE"  old-osmode)
              (setvar "CMDECHO" old-echo)
+             (if old-drawctl (setvar "DRAWORDERCTL" old-drawctl))
+             (if old-transp  (setvar "TRANSPARENCYDISPLAY" old-transp))
 
              ;; De-highlight all candidate blocks
              (if highlighted-ents

@@ -2,7 +2,7 @@
 ;;; 06_Utilities.lsp - Drawing Cleanup, Measurement, System Fixes & Utilities
 ;;; Layer: Commands (Priority 06)
 ;;; Author   : Haseeb
-;;; Commands : LOAD-STYLES (LST)
+;;; Commands : TC, BBOX, CTRANS, FL0, PUA (QA), FIXSELECT, FIXBOX, WF, WR, LOAD-STYLES (LST)
 ;;; ==========================================================================
 
 (vl-load-com)
@@ -33,56 +33,8 @@
 
 
 ;;; --------------------------------------------------------------------------
-;;; 2. SMART DUPLICATION & BOUNDING BOX
+;;; 2. BOUNDING BOX & GEOMETRY BOUNDS
 ;;; --------------------------------------------------------------------------
-
-;; CIP : Duplicate In-Place -> Bring to Front -> Keep Duplicates Selected
-(defun c:CIP (/ *error* ss ssNew i ent vlaEnt newVlaObj oldCmd)
-  (setq oldCmd (getvar 'cmdecho))
-
-  (defun *error* (msg)
-    (if oldCmd (setvar 'cmdecho oldCmd))
-    (CadSetup:UndoReset)
-    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
-      (princ (strcat "\n[CIP] Error: " msg))
-    )
-    (princ)
-  )
-
-  (setvar 'cmdecho 0)
-
-  (setq ss (ssget "_I"))
-  (if (not ss)
-    (progn
-      (princ "\nSelect objects to duplicate in place: ")
-      (setq ss (ssget))
-    )
-  )
-
-  (if ss
-    (progn
-      (CadSetup:UndoStart)
-      (setq ssNew (ssadd))
-
-      (repeat (setq i (sslength ss))
-        (setq ent (ssname ss (setq i (1- i))))
-        (setq vlaEnt (vlax-ename->vla-object ent))
-        (setq newVlaObj (vla-copy vlaEnt))
-        (ssadd (vlax-vla-object->ename newVlaObj) ssNew)
-      )
-
-      (command "._draworder" ssNew "" "_Front")
-      (CadSetup:UndoEnd)
-
-      (sssetfirst nil ssNew)
-      (princ (strcat "\n[CIP] " (itoa (sslength ssNew)) " object(s) duplicated in place on top."))
-    )
-    (princ "\n[CIP] No objects selected.")
-  )
-
-  (setvar 'cmdecho oldCmd)
-  (princ)
-)
 
 ;; BBOX : Draw Automatic Bounding Box Rectangle Around Selected Objects
 ;; Powered by CadSetup:GetBoundingBoxUcs from Helpers/Help_Geometry.lsp

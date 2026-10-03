@@ -98,7 +98,8 @@ d:\HASEEB\Cad-Setup-v4\
 │   ├── 03_Blocks.lsp           ; Block creation, transforms & visual palette (CB, OB, RB, RBH, RBV, BL, 8)
 │   ├── 04_Layout-Views.lsp     ; Viewport and presentation tools (TS, A3SERIES, VPCLIPRECTANGLE, VR)
 │   ├── 05_Selection-Filters.lsp; Fast selection isolators (SR, SL, SB, SH, SA, SW)
-│   ├── 06_Utilities.lsp        ; Geometry utilities & repair (TC, CIP, BBOX, CTRANS, FL0, PUA, WF, WR, LST)
+│   ├── 06_Utilities.lsp        ; Geometry calculation & repair (TC, BBOX, CTRANS, FL0, PUA, WF, WR, LST)
+│   ├── 07_Copy-Utilities.lsp   ; Smart duplication & segment cloning (CIP, COPYSEG/CS)
 │   └── 99_Aliases.lsp          ; AutoCAD command alias mapping & atomic macros (ROR, SCR, BF, BB, ME, JJ, PC, PO, FF, CC, BR1)
 └── UI/
     ├── BLOCK-PALETTE.dcl       ; Visual Standard Joinery Blocks & Components Palette DCL

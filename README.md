@@ -161,6 +161,7 @@ Isolate or exclude entity categories in one click without touching layer freeze/
 * **`JJ`**: Batch convert and join lines/arcs into closed 2D polylines.
 * **`TC`**: Calculate cumulative total curve length for lines, polylines, arcs, splines, and circles.
 * **`CIP`**: Duplicate objects in place, bring to front, and keep new copies selected.
+* **`COPYSEG`** / **`CS`**: Duplicate a single polyline segment, line, or curve with live interactive placement drag from the pick point.
 * **`BBOX`**: Draw automatic bounding box rectangle around selected geometry in current UCS.
 * **`FL0`**: Safely flatten 3D geometry to `Z = 0.0`.
 * **`PUA` / `QA`**: Deep purge (All, RegApps, Zero-length geometry, Empty text) + drawing database audit.
@@ -241,6 +242,7 @@ Located in [Core/01_Undo-Manager.lsp](file:///d:/HASEEB/Cad-Setup-v4/Core/01_Und
 | `BF` / `BB` | Draworder | Bring to Front / Send to Back |
 | `TC` | Curve Length | Cumulative length calculator for lines/arcs/splines |
 | `CIP` | Copy In-Place | Duplicates objects at `(0,0,0)` to top draw order |
+| `CS` | COPYSEG | Duplicate a single polyline segment or line with live placement drag |
 | `BBOX` | Bounding Box | Draws rectangular bounding box in current UCS |
 | `FL0` | Flatten | Flattens selected objects or modelspace to `Z=0` |
 | `PUA` / `QA` | Purge / Audit | Deep database purge & audit |
@@ -276,7 +278,8 @@ Cad-Setup-v4/
 │   ├── 03_Blocks.lsp           # Auto block creator & in-place transforms (CB, RB, RBH)
 │   ├── 04_Layout-Views.lsp     # Layout & presentation tools (TS, VR, A3SERIES)
 │   ├── 05_Selection-Filters.lsp# Instant entity filters (SR, SL, SB, SH, SA, SW)
-│   ├── 06_Utilities.lsp        # Geometry utilities (TC, CIP, BBOX, FL0, PUA, LST)
+│   ├── 06_Utilities.lsp        # Geometry utilities (TC, BBOX, FL0, PUA, LST)
+│   ├── 07_Copy-Utilities.lsp   # Smart duplication & cloning (CIP, COPYSEG/CS)
 │   └── 99_Aliases.lsp          # Production ergonomic command aliases & macros
 └── UI/
     ├── CAD-SETTINGS.dcl        # Master settings dialog definition

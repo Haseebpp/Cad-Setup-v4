@@ -166,7 +166,8 @@ Use this pattern when the command delegates to a native AutoCAD interactive comm
    - `03_Blocks.lsp`: Block generation, rotation, alignment (`CB`, `OB`, `RB`, `BL`)
    - `04_Layout-Views.lsp`: Sheet, viewport, and presentation tools (`TS`, `A3SERIES`, `VPCLIPRECTANGLE`, `VR`)
    - `05_Selection-Filters.lsp`: Fast entity filters (`ssget` wrappers: `SR`, `SL`, `SB`, `SH`, `SA`, `SW`)
-   - `06_Utilities.lsp`: Calculation, cleanup, repair (`CIP`, `BBOX`, `CTRANS`, `FL0`, `WF`, `WR`)
+   - `06_Utilities.lsp`: Calculation, cleanup, repair (`TC`, `BBOX`, `CTRANS`, `FL0`, `WF`, `WR`, `LST`)
+   - `07_Copy-Utilities.lsp`: Smart duplication & cloning (`CIP`, `COPYSEG`/`CS`)
    - `99_Aliases.lsp`: Native AutoCAD alias remappings and macro actions
 2. Paste either **Pattern A** (Batch) or **Pattern B** (Interactive) into the file.
 3. If reusable math or geometry is needed, implement the calculation in `Helpers/Help_Geometry.lsp` first.

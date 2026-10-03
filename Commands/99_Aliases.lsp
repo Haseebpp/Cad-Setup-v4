@@ -160,6 +160,7 @@
 
 ;;; --- MODIFY & CLEANUP -----------------------------------------------------
 (defun c:S   () (initcommandversion) (command "_.STRETCH")   (princ)) ; S   -> Stretch crossing-window selection
+(defun c:DS  () (c:DYNSTRETCH))                                       ; DS  -> Multi-boundary dynamic stretch (DYNSTRETCH)
 (defun c:O   () (initcommandversion) (command "_.OFFSET")    (princ)) ; O   -> Offset curves by parallel distance
 (defun c:TR  () (initcommandversion) (command "_.TRIM")      (princ)) ; TR  -> Trim geometry to cutting edges
 (defun c:EX  () (initcommandversion) (command "_.EXTEND")    (princ)) ; EX  -> Extend geometry to boundary edges

@@ -280,6 +280,7 @@ Cad-Setup-v4/
 │   ├── 05_Selection-Filters.lsp# Instant entity filters (SR, SL, SB, SH, SA, SW)
 │   ├── 06_Utilities.lsp        # Geometry utilities (TC, BBOX, FL0, PUA, LST)
 │   ├── 07_Copy-Utilities.lsp   # Smart duplication & cloning (CIP, COPYSEG/CS)
+│   ├── 08_Dynamic-Stretch.lsp  # Multi-boundary dynamic stretch (DYNSTRETCH/DS)
 │   └── 99_Aliases.lsp          # Production ergonomic command aliases & macros
 └── UI/
     ├── CAD-SETTINGS.dcl        # Master settings dialog definition

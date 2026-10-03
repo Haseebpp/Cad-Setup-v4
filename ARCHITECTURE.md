@@ -100,6 +100,7 @@ d:\HASEEB\Cad-Setup-v4\
 │   ├── 05_Selection-Filters.lsp; Fast selection isolators (SR, SL, SB, SH, SA, SW)
 │   ├── 06_Utilities.lsp        ; Geometry calculation & repair (TC, BBOX, CTRANS, FL0, PUA, WF, WR, LST)
 │   ├── 07_Copy-Utilities.lsp   ; Smart duplication & segment cloning (CIP, COPYSEG/CS)
+│   ├── 08_Dynamic-Stretch.lsp  ; Multi-boundary dynamic stretch (DYNSTRETCH, DS)
 │   └── 99_Aliases.lsp          ; AutoCAD command alias mapping & atomic macros (ROR, SCR, BF, BB, ME, JJ, PC, PO, FF, CC, BR1)
 └── UI/
     ├── BLOCK-PALETTE.dcl       ; Visual Standard Joinery Blocks & Components Palette DCL

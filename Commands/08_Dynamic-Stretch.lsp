@@ -586,6 +586,60 @@
       (if snap-pt snap-pt pt))
     pt))
 
+;; Helper: Draw live snap aperture crosshair at snapped position in UCS
+(defun dstr:draw-aperture-crosshair (pt col / aLen x y)
+  (setq aLen (max (* (getvar "VIEWSIZE") 0.012) 1e-4)
+        x    (car pt)
+        y    (cadr pt))
+  (grdraw (list (- x aLen) y 0.0) (list (+ x aLen) y 0.0) col 1)
+  (grdraw (list x (- y aLen) 0.0) (list x (+ y aLen) 0.0) col 1))
+
+;; Helper: Interactive first corner picking loop (grread)
+;; Continuously refreshes all existing selection boxes at 60 FPS across zoom/pan
+(defun dstr:pick-first-corner (prompt-str existing-boxes / loop gr code val raw-pt cur-pt res)
+  (setq loop t
+        res  nil)
+  (princ prompt-str)
+  (redraw)
+  (if existing-boxes (dstr:draw-all-boxes existing-boxes))
+  (while loop
+    (setq gr (grread t 15 0))
+    (setq code (car gr)
+          val  (cadr gr))
+    (cond
+      ;; Mouse move: code = 5
+      ((= code 5)
+       (setq raw-pt val
+             cur-pt (dstr:snap-point raw-pt))
+       ;; Continuously refresh all existing selection boxes upon mouse move (restoring view after zoom/pan)
+       (redraw)
+       (if existing-boxes (dstr:draw-all-boxes existing-boxes))
+       (dstr:draw-aperture-crosshair cur-pt 1))
+
+      ;; Left click: code = 3
+      ((= code 3)
+       (setq raw-pt val
+             cur-pt (dstr:snap-point raw-pt)
+             res    cur-pt
+             loop   nil))
+
+      ;; Esc: code = 2, val = 27
+      ((and (= code 2) (= val 27))
+       (setq res  nil
+             loop nil))
+
+      ;; Enter / Space: code = 2, val = 13 or 32
+      ((and (= code 2) (or (= val 13) (= val 32)))
+       (setq res  'finish
+             loop nil))
+
+      ;; Right click: code = 11 or 25
+      ((or (= code 11) (= code 25))
+       (setq res  'finish
+             loop nil))))
+  (redraw)
+  res)
+
 ;; Helper: Render live frame with dynamic block indicators, vectors & deformed ghosts
 (defun dstr:render-live-blocks (detected-data box-list dx dy /
                                 item mode ent obj corners cx cy d pairs singles
@@ -687,6 +741,52 @@
     )
   )
 )
+
+;; Helper: Interactive base point picking loop (grread)
+;; Continuously refreshes all selection boxes (light red) and detected block indicators at 60 FPS
+;; Displays a live snap aperture crosshair at snapped position and survives zoom/pan
+(defun dstr:pick-base-point (box-list detected-data / loop gr code val raw-pt cur-pt base-pt)
+  (setq loop    t
+        base-pt nil)
+  (princ "\nSpecify base point [Snap to Object or Click in Drawing] (or Esc to cancel): ")
+  (redraw)
+  (dstr:draw-all-boxes-light box-list)
+  (dstr:render-live-blocks detected-data box-list 0.0 0.0)
+
+  (while loop
+    (setq gr (grread t 15 0))
+    (setq code (car gr)
+          val  (cadr gr))
+    (cond
+      ;; Mouse move: code = 5
+      ((= code 5)
+       (setq raw-pt val
+             cur-pt (dstr:snap-point raw-pt))
+       ;; Continuously refresh all light selection boxes and detected block indicators
+       (redraw)
+       (dstr:draw-all-boxes-light box-list)
+       (dstr:render-live-blocks detected-data box-list 0.0 0.0)
+       ;; Live Snap Aperture Crosshair at snapped position (Color 3 = Green)
+       (dstr:draw-aperture-crosshair cur-pt 3))
+
+      ;; Left click: code = 3
+      ((= code 3)
+       (setq raw-pt  val
+             base-pt (dstr:snap-point raw-pt)
+             loop    nil))
+
+      ;; Esc: code = 2, val = 27
+      ((and (= code 2) (= val 27))
+       (setq base-pt nil
+             loop    nil))
+
+      ;; Right click / Enter / Space without click: cancel
+      ((or (and (= code 2) (or (= val 13) (= val 32)))
+           (or (= code 11) (= code 25)))
+       (setq base-pt nil
+             loop    nil))))
+  (redraw)
+  base-pt)
 
 ;; Helper: Interactive live displacement loop (grread) with real-time arrow & ghost tracking
 (defun dstr:pick-displacement (base-pt box-list detected-data /
@@ -1109,8 +1209,8 @@
   ;; 1. User Prompts: Boundary Box(es) with Red Dotted / Green Fill Dragging
   ;;-----------------------------------------------------------------------
   (setq box-list nil)
-  (setq pt1 (getpoint "\nSpecify first corner of crossing window (or Enter to finish): "))
-  (if pt1
+  (setq pt1 (dstr:pick-first-corner "\nSpecify first corner of crossing window (or Enter/Space/Right-Click to finish): " nil))
+  (if (and pt1 (not (eq pt1 'finish)))
     (progn
       (setq pt2 (dstr:pick-corner pt1 box-list))
       (if pt2
@@ -1123,10 +1223,12 @@
           ;; Prompt for additional crossing windows (multi-boundary mode)
           (setq continue t)
           (while continue
-            (setq p-next (getpoint (strcat "\nSpecify first corner of next window ["
-                                           (itoa (1+ (length box-list)))
-                                           "] (or press Enter/Space to proceed): ")))
-            (if p-next
+            (setq p-next (dstr:pick-first-corner
+                           (strcat "\nSpecify first corner of next window ["
+                                   (itoa (1+ (length box-list)))
+                                   "] (or press Enter/Space/Right-Click to proceed): ")
+                           (reverse box-list)))
+            (if (and p-next (not (eq p-next 'finish)))
               (progn
                 (setq p-next2 (dstr:pick-corner p-next box-list))
                 (if p-next2
@@ -1183,7 +1285,7 @@
       ;;-----------------------------------------------------------------------
       ;; 2. User Prompts: Base Point and Live Interactive Displacement
       ;;-----------------------------------------------------------------------
-      (setq base-pt (getpoint "\nSpecify base point: "))
+      (setq base-pt (dstr:pick-base-point box-list detected-data))
       (if (not base-pt)
         (progn
           (princ "\n[DYNSTRETCH] Base point cancelled.")

@@ -1,4 +1,4 @@
-# Compiled DLLs in bin/ ARE committed so PCs without the .NET SDK can NETLOAD them.
+# Build output folders
+bin/
 obj/
 *.log
-bin/**/*.pdb

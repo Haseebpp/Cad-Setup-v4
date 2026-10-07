@@ -282,13 +282,19 @@ Cad-Setup-v4/
 │   ├── 07_Copy-Utilities.lsp   # Smart duplication & cloning (CIP, COPYSEG/CS)
 │   ├── 08_Dynamic-Stretch.lsp  # Multi-boundary dynamic stretch (DYNSTRETCH/DS)
 │   └── 99_Aliases.lsp          # Production ergonomic command aliases & macros
-└── UI/
-    ├── CAD-SETTINGS.dcl        # Master settings dialog definition
-    ├── CAD-SETTINGS-CTRL.lsp   # Event controller & live vector preview engine
-    ├── GRID-GENERATOR.dcl      # Structural grid generator dialog
-    ├── BLOCK-PALETTE.dcl       # Visual standard joinery block palette
-    └── UNIFIED-LAYER-SELECTOR.dcl # Dynamic layer selector dialog
+├── UI/
+│   ├── CAD-SETTINGS.dcl        # Master settings dialog definition
+│   ├── CAD-SETTINGS-CTRL.lsp   # Event controller & live vector preview engine
+│   ├── GRID-GENERATOR.dcl      # Structural grid generator dialog
+│   ├── BLOCK-PALETTE.dcl       # Visual standard joinery block palette
+│   └── UNIFIED-LAYER-SELECTOR.dcl # Dynamic layer selector dialog
+└── DotNet/                     # Level 5: C# commands (.NET 10 single-file, auto-built & NETLOADed)
+    ├── Directory.Build.props   # Shared AutoCAD 2027 API references (CADSETUP_ACAD_DIR override)
+    ├── DotNet_HelloCad.cs      # Sample / template command (HELLO-NET)
+    └── bin/DotNet_XXXX/<stamp>/ # Compiled DLLs (committed for PCs without the .NET SDK)
 ```
+
+> **DotNet commands:** `DOTNET-BUILD` (`DNB`) rebuilds changed `DotNet_*.cs` files and loads them, `DOTNET-REBUILD` forces a full rebuild, and `DOTNET-STATUS` lists modules, DLLs and build logs. Building requires the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). Without it, CadSetup loads the committed DLLs.
 
 ---
 

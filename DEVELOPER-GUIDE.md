@@ -267,6 +267,35 @@ To comply with **Golden Rule 6**, never call raw `(vla-add ...)` or `(command ".
 
 ---
 
+### Recipe 7: How to Add an Advanced .NET (C#) Command
+Use the `DotNet/` layer when LISP is too slow or the API isn't available to LISP (transactions, overrules, jigs, events, WPF palettes).
+
+1. Create `DotNet/DotNet_<Name>.cs`. **The `DotNet_` prefix is required**, because only matching files are built. Copy the header from [DotNet_HelloCad.cs](file:///d:/HASEEB/Cad-Setup-v4/DotNet/DotNet_HelloCad.cs):
+   ```csharp
+   #:property TargetFramework=net10.0-windows
+   #:property OutputType=Library
+   #:property PublishAot=false
+   using Autodesk.AutoCAD.Runtime;
+   [assembly: CommandClass(typeof(CadSetup.DotNet.MyTool))]
+   namespace CadSetup.DotNet;
+   public class MyTool
+   {
+       [CommandMethod("CADSETUP", "MY-TOOL", CommandFlags.Modal)]
+       public void Run() { /* ... */ }
+   }
+   ```
+   No `.csproj` is needed. [Directory.Build.props](file:///d:/HASEEB/Cad-Setup-v4/DotNet/Directory.Build.props) adds `acdbmgd`, `acmgd` and `accoremgd` from `C:\Program Files\Autodesk\AutoCAD 2027`. Set the `CADSETUP_ACAD_DIR` environment variable if AutoCAD is installed somewhere else.
+2. In AutoCAD run `DNB` (`DOTNET-BUILD`). Autorun runs, hidden:
+   `dotnet build DotNet_<Name>.cs -o bin\DotNet_<Name>\<stamp> -p:AssemblyName=DotNet_<Name>_<stamp> ...`
+   and then NETLOADs the new DLL. The same check also runs automatically on startup, and it only rebuilds files whose source changed.
+3. **Hot reload:** Edit the `.cs` file and run `DNB` again. Each build gets a new folder and assembly name, so it can load while the old DLL is still locked. The newest definition of the command wins. Old folders are cleaned up when they are no longer locked.
+4. If a build fails, the previous DLL stays active. Check `DotNet\bin\DotNet_<Name>\build.log`, or run `DOTNET-STATUS`.
+5. Commit the new `bin\DotNet_<Name>\<stamp>\` folder so PCs without the .NET SDK can still load the command.
+
+> Rules: one feature per file, no top-level statements (it's a library), and keep the `#:property` lines at the very top.
+
+---
+
 ## 5. Troubleshooting & FAQ
 
 **Q: How do I enable detailed diagnostic / verbose logging during startup?**

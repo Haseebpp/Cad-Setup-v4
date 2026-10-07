@@ -1,0 +1,38 @@
+<!--
+  Directory.Build.props - Shared settings for CadSetup .NET single-file commands
+  ============================================================================
+  Every "dotnet build DotNet_XXXX.cs" (.NET 10 file-based build, no .csproj)
+  in this folder automatically imports this file. It adds the AutoCAD managed
+  API references once for all files. TargetFramework / OutputType=Library are
+  set by the #:property lines at the top of each .cs file (and also passed on
+  the command line by Autorun.lsp), because props are evaluated too early to
+  override the file-based app defaults.
+
+  AutoCAD location:
+    Default : C:\Program Files\Autodesk\AutoCAD 2027
+    Override: set the environment variable CADSETUP_ACAD_DIR
+-->
+<Project>
+
+  <PropertyGroup>
+    <AcadDir Condition="'$(AcadDir)' == '' and '$(CADSETUP_ACAD_DIR)' != ''">$(CADSETUP_ACAD_DIR)</AcadDir>
+    <AcadDir Condition="'$(AcadDir)' == ''">C:\Program Files\Autodesk\AutoCAD 2027</AcadDir>
+  </PropertyGroup>
+
+  <!-- AutoCAD managed API. Private=false: never copy AutoCAD DLLs into bin. -->
+  <ItemGroup>
+    <Reference Include="accoremgd">
+      <HintPath>$(AcadDir)\accoremgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="acdbmgd">
+      <HintPath>$(AcadDir)\acdbmgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="acmgd">
+      <HintPath>$(AcadDir)\acmgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

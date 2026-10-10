@@ -17,7 +17,7 @@
 - [Why Cad-Setup-v4?](#why-cad-setup-v4)
 - [Quick Start & Installation](#quick-start--installation)
 - [Core Features](#core-features)
-  - [1. Numbered Workflow Keys (1–8, -)](#1-numbered-workflow-keys-18--)
+  - [1. Numbered Workflow Keys (0–8, -)](#1-numbered-workflow-keys-08--)
   - [2. In-Place Block Surgery (CB, RB, RBH, RBV)](#2-in-place-block-surgery-cb-rb-rbh-rbv)
   - [3. Automated Model Space Layer Legend (BLL)](#3-automated-model-space-layer-legend-bll)
   - [4. Viewport Duplicate & Rectangular Clip (VR)](#4-viewport-duplicate--rectangular-clip-vr)
@@ -81,9 +81,10 @@ Upon startup, the system automatically initializes all 36 production layers, lin
 
 ## Core Features
 
-### 1. Numbered Workflow Keys (1–8, -)
+### 1. Numbered Workflow Keys (0–8, -)
 Single-digit drafting shortcuts mapped to top-row keys for rapid execution. Each key safely sets the destination standard layer, executes the drafting tool, and **restores the active working layer**:
 
+* `[0]` / `L0` / `BY0` : **Layer 0 & ByLayer Normalizer** — Dual-mode reset. When objects are pre-selected (or picked via prompt), instantly moves them to Layer `0` and resets all properties (Color, Linetype, Lineweight, Transparency, PlotStyle, Material) to `ByLayer`, deeply normalizing nested entities inside block definitions. Always sets active working layer (`CLAYER`) to `0` and locks drafting defaults (`CECOLOR`, `CELTYPE`, `CELWEIGHT`) to `ByLayer`. Retains selection for follow-up editing.
 * `[1]` / `HL` : **Help Line & Guide Points** — Interactive node point drafting on `01-HELP-LINE` with dynamic collinear line segment or infinite xline generation based on active `HLMODE`. Pre-selection extracts vertices into guide points.
 * `[1M]` / `HLMODE` : **Help Line Mode** — Switches `01-HELP-LINE` generation mode (`0` = Only Points, `1` = Collinear Line Segments [Default], `2` = Collinear Infinite Xlines) and instantly refreshes the layer.
 * `[1X]` : **Toggle Help Line Mode (1 ↔ 2)** — Instantly toggles between Mode 1 (Line Segments) and Mode 2 (Infinite Xlines) with a single keystroke.
@@ -92,7 +93,7 @@ Single-digit drafting shortcuts mapped to top-row keys for rapid execution. Each
 * `[2]` / `VP` : **Viewport Boundary** — Draws on `02-VIEW-PORT` and stamps dynamic ISO A3 scale metadata MText.
 * `[3]` / `GL` : **Grid Line Maker** — Launches the parametric structural grid generator.
 * `[4]` / `LL` : **Line Layer** — DCL selector for `R-LINE-*` layers + polyline drawing.
-* `[5]` / `ML` : **Material Layer** — DCL selector for `R-MTL-*` layers + rectangle drawing.
+* `[5]` / `ML` : **Material Layer** — Dual-mode material workflow. If objects are selected (or prompted), moves them to the material layer and automatically fills closed boundaries (polylines, circles, ellipses, splines) with the material's associative hatch pattern on `R-HTCH-GENR`. If no objects selected, opens DCL selector + continuous rectangle drawing tool. Toggle auto-hatch with `AH` / `AutoHatch`.
 * `[6]` / `AD` : **Annotation Suite** — DCL layer switcher for dimensions, text, leaders, and tags.
 * `[7]` / `HD` : **Hardware Suite** — DCL layer switcher for fittings and ironmongery.
 * `[8]` / `BL` : **Joinery Blocks** — Visual DCL palette for standard joinery blocks.
@@ -189,6 +190,7 @@ Located in [Core/01_Undo-Manager.lsp](file:///d:/HASEEB/Cad-Setup-v4/Core/01_Und
 ### Rapid Drafting & Workflow Keys
 | Key / Command | Alias | Destination Layer | Description |
 |:---:|:---:|:---|:---|
+| `0` | `L0`, `BY0` | `0` | Move selection to Layer 0, force all properties ByLayer (deep block recursion), set CLAYER=0 & defaults |
 | `1` | `HL` | `01-HELP-LINE` | Help line guide points with live collinear line/xline generation |
 | `HLMODE` | `1M` | `01-HELP-LINE` | Switch help line mode (0=Points, 1=Lines [Default], 2=Xlines) & refresh |
 | `TOGGLE-HLMODE-1-2` | `1X` | `01-HELP-LINE` | Rapid toggle between HLMODE 1 (Line Segments) and 2 (Infinite Xlines) |
@@ -196,7 +198,7 @@ Located in [Core/01_Undo-Manager.lsp](file:///d:/HASEEB/Cad-Setup-v4/Core/01_Und
 | `2` | `VP` | `02-VIEW-PORT` | Viewport box with auto A3 scale metadata stamp |
 | `3` | `GL` | `03-GRID-LINE` | Parametric structural grid generator with bay parser |
 | `4` | `LL` | `R-LINE-*` | Line layer DCL selector + polyline tool |
-| `5` | `ML` | `R-MTL-*` | Material layer DCL selector + rectangle tool |
+| `5` | `ML` | `R-MAT-*` | Material layer selector + auto-hatch closed boundaries + rectangle tool |
 | `6` | `AD` | `R-ANNO-*` | Annotation & dimension layer switcher |
 | `7` | `HD` | `R-HARD-*` | Hardware & fittings layer switcher |
 | `8` | `BL` | `R-BLCK-*` | Visual standard joinery block palette |
@@ -273,8 +275,8 @@ Cad-Setup-v4/
 │   └── Db_Blocks.lsp           # Joinery block definitions & procedural geometry
 ├── Commands/
 │   ├── 00_System-Variables.lsp # System variable restoration (APPLY-SYSVARS, RSV)
-│   ├── 01_Workflow-Keys.lsp    # Numbered rapid drafting keys (1, 2, 3, 4, 5...)
-│   ├── 02_Layers.lsp           # Layer loading & legend generator (RL, DCL, BLL)
+│   ├── 01_Workflow-Keys.lsp    # Numbered rapid drafting keys (0, 1, 2, 3, 4, 5...)
+│   ├── 02_Layers.lsp           # Layer loading & legend generator (RL, DCL, L0, BLL)
 │   ├── 03_Blocks.lsp           # Auto block creator & in-place transforms (CB, RB, RBH)
 │   ├── 04_Layout-Views.lsp     # Layout & presentation tools (TS, VR, A3SERIES)
 │   ├── 05_Selection-Filters.lsp# Instant entity filters (SR, SL, SB, SH, SA, SW)

@@ -57,7 +57,11 @@
 ;; ENVIRONMENT & CAPABILITY CHECKS
 ;; ===========================================================================
 
-;; AutoLISP compatibility utility for symbolp and fboundp
+;; AutoLISP compatibility utility for stringp, symbolp and fboundp
+(defun stringp (val)
+  (= (type val) 'STR)
+)
+
 (defun symbolp (sym)
   (= (type sym) 'SYM)
 )

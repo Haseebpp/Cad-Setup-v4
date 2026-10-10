@@ -89,11 +89,11 @@ d:\HASEEB\Cad-Setup-v4\
 │   ├── Help_ActiveX.lsp        ; Safe COM/VLA wrappers, safe getvar/setvar, clamp
 │   ├── Help_Geometry.lsp       ; Bounding boxes in UCS, curve lengths, midpoints, annotative scale
 │   ├── Help_Graphics.lsp       ; 2D primitives (DrawBox, DrawLine, AddText), hatch & draw order
-│   ├── Help_Layers.lsp         ; EnsureLayerReady, EnsureLayerFromDb, EnsureLayer, SetCurrentLayerSafe, LoadLinetype
+│   ├── Help_Layers.lsp         ; EnsureLayerReady, EnsureLayerFromDb, EnsureLayer, SetCurrentLayerSafe, NormalizeToLayer0ByLayer, LoadLinetype
 │   └── Help_Selection.lsp      ; ssget filters, predicates (is-annotation, is-revcloud)
 ├── Commands/
 │   ├── 00_System-Variables.lsp ; Applies sysvars from Database/Db_SysVars.lsp (APPLY-SYSVARS, RSV)
-│   ├── 01_Workflow-Keys.lsp    ; Fast drafting key shortcuts (1=HL, 2=VP, 3=GL, 4=LL, 5=ML, 6=AD, 7=HD, 8=BL, `=R-)
+│   ├── 01_Workflow-Keys.lsp    ; Fast drafting key shortcuts (0=L0, 1=HL, 2=VP, 3=GL, 4=LL, 5=ML, 6=AD, 7=HD, 8=BL, `=R-)
 │   ├── 02_Layers.lsp           ; Layer management commands (RL, DCL, L0, BLL)
 │   ├── 03_Blocks.lsp           ; Block creation, transforms & visual palette (GB/G, DB, UB, RB, RBH, RBV, BL, 8)
 │   ├── 04_Layout-Views.lsp     ; Viewport and presentation tools (TS, A3SERIES, VPCLIPRECTANGLE, VR)

@@ -15,6 +15,7 @@
 ;;;        retaining active selection for immediate follow-up commands (Move, Copy, Scale, etc.).
 ;;;
 ;;; KEY MAPPINGS:
+;;;   [0] / L0 / BY0 : Layer 0 & ByLayer Normalizer (Dual-mode, Deep Block recursion, Drawing Defaults)
 ;;;   [1] / HL : Help Line & Guide Points (HLMODE 0=Points, 1=Lines [Default], 2=Xlines)
 ;;;   [1M] / HLMODE / HLM : Switch Help Line generation mode (0, 1, 2) & instantly refresh layer
 ;;;   [1X] : Rapid toggle between HLMODE 1 (Line Segments) and 2 (Infinite Xlines)
@@ -919,7 +920,13 @@
 ;;; 3. STRUCTURAL & ARCHITECTURAL GRID SYSTEM GENERATOR (3 / GL)
 ;;; --------------------------------------------------------------------------
 
-;; AutoLISP compatibility utility for fboundp (function bound predicate)
+;; AutoLISP compatibility utilities (function bound predicate, symbol, string)
+(if (not (boundp 'stringp))
+  (defun stringp (val)
+    (= (type val) 'STR)
+  )
+)
+
 (if (not (boundp 'symbolp))
   (defun symbolp (sym)
     (= (type sym) 'SYM)
@@ -2173,7 +2180,7 @@
     ((and (listp defaultTool) (= (car defaultTool) :ASSIGN))
      (setq isAssignMode T
            targetSS     (cadr defaultTool)))
-    ((and defaultTool (stringp defaultTool) (or (= (strcase defaultTool) "ASSIGN") (= (strcase defaultTool) ":ASSIGN")))
+    ((and defaultTool (= (type defaultTool) 'STR) (or (= (strcase defaultTool) "ASSIGN") (= (strcase defaultTool) ":ASSIGN")))
      (setq isAssignMode T
            targetSS     (ssget "_I")))
   )
@@ -2673,7 +2680,7 @@
 
 ;; CadSetup:PromptAndAssignLayer - Generalized interactive layer selector & assignment for pre-selected objects
 ;; Parameters:
-;;   ss            : Implied selection set (ssget "_I")
+;;   ss            : Implied selection set (ssget "_I") or picked selection set
 ;;   filterPattern : Layer wildcard pattern (e.g. "R-LINE-*", "R-MAT-*", "R-ANNO-*", "R-HARD-*", "R-*")
 ;;   categoryLabel : Human-readable category string (e.g. "Line", "Material", "Annotation", "Hardware", "R-Layer")
 ;;   showHatch     : Boolean flag whether to show hatch specs in DCL dialog (T for materials/R-layers, nil otherwise)
@@ -2686,20 +2693,58 @@
     (progn
       ;; Build Command-Line Keywords and Prompt Map
       (setq kwMap '(("DIALOG" . "DIALOG") ("D" . "DIALOG")))
-      (setq promptStr (strcat "\nAssign " categoryLabel " to Selection [Dialog"))
       (setq kwStr "Dialog D")
+
+      (if showHatch
+        (progn
+          (setq kwMap (cons '("AUTOHATCH" . "AUTOHATCH")
+                            (cons '("AH" . "AUTOHATCH")
+                                  (cons '("A" . "AUTOHATCH") kwMap))))
+          (setq kwStr (strcat kwStr " AutoHatch AH A"))
+        )
+      )
 
       (foreach lay matchingLayers
         (setq suffix (CadSetup:GetLayerPromptSuffix lay filterPattern))
         (setq kw (strcase (vl-string-translate " " "_" suffix)))
         (setq kwMap (cons (cons kw lay) kwMap))
-        (setq promptStr (strcat promptStr "/" suffix))
         (setq kwStr (strcat kwStr " " kw))
       )
-      (setq promptStr (strcat promptStr "] <Dialog>: "))
 
-      (initget kwStr)
-      (setq opt (getkword promptStr))
+      (if showHatch
+        (progn
+          (setq opt "AUTOHATCH")
+          (while (and opt (or (= (strcase opt) "AUTOHATCH") (= (strcase opt) "AH") (= (strcase opt) "A")))
+            (setq promptStr (strcat "\nAssign " categoryLabel " to Selection (AutoHatch: " (if *CadSetup-AutoHatch-Enabled* "ON" "OFF") ") [Dialog/AutoHatch"))
+            (foreach lay matchingLayers
+              (setq suffix (CadSetup:GetLayerPromptSuffix lay filterPattern))
+              (setq promptStr (strcat promptStr "/" suffix))
+            )
+            (setq promptStr (strcat promptStr "] <Dialog>: "))
+
+            (initget kwStr)
+            (setq opt (getkword promptStr))
+
+            (if (and opt (or (= (strcase opt) "AUTOHATCH") (= (strcase opt) "AH") (= (strcase opt) "A")))
+              (progn
+                (setq *CadSetup-AutoHatch-Enabled* (not *CadSetup-AutoHatch-Enabled*))
+                (princ (strcat "\n[" categoryLabel "] Smart Auto-Hatch is now " (if *CadSetup-AutoHatch-Enabled* "ON" "OFF") "."))
+              )
+            )
+          )
+        )
+        (progn
+          (setq promptStr (strcat "\nAssign " categoryLabel " to Selection [Dialog"))
+          (foreach lay matchingLayers
+            (setq suffix (CadSetup:GetLayerPromptSuffix lay filterPattern))
+            (setq promptStr (strcat promptStr "/" suffix))
+          )
+          (setq promptStr (strcat promptStr "] <Dialog>: "))
+
+          (initget kwStr)
+          (setq opt (getkword promptStr))
+        )
+      )
 
       (if (or (null opt) (= (strcase opt) "DIALOG") (= (strcase opt) "D"))
         (CadSetup:OpenLayerSelector filterPattern (strcat "Assign " categoryLabel " Layer to Selection") (list :ASSIGN ss) showHatch)
@@ -2771,7 +2816,15 @@
 
 ;; c:ML - Material Layer / Rectangle Workflow Entry Point
 (defun c:ML ( / ss matLayers promptStr kwStr kwMap suffix kw opt chosenLayer )
+  ;; Dual-mode selection: check pre-selection (Pickfirst) or prompt user
   (setq ss (ssget "_I"))
+  (if (or (null ss) (= (sslength ss) 0))
+    (progn
+      (princ "\nSelect objects to assign material or [Enter to draw rectangles]: ")
+      (setq ss (ssget))
+    )
+  )
+
   (if (and ss (> (sslength ss) 0))
     (CadSetup:PromptAndAssignLayer ss "R-MAT-*" "Material" T)
     (progn
@@ -2973,6 +3026,65 @@
   (princ)
 )
 (defun c:8 () (c:BL))
+
+;;; --------------------------------------------------------------------------
+;;; WORKFLOW KEY 0: LAYER 0 & BYLAYER NORMALIZER (0 / L0 / BY0)
+;;; --------------------------------------------------------------------------
+;; Dual-mode operation:
+;;   1. If objects are pre-selected (Pickfirst) or selected via prompt, moves them
+;;      to Layer "0" and resets all properties to ByLayer, deeply normalizing
+;;      nested block definitions if blocks are included.
+;;   2. Always switches active layer (CLAYER) to "0" and resets drawing defaults
+;;      (CECOLOR, CELTYPE, CELWEIGHT) to ByLayer.
+;;   3. Retains selection for immediate follow-up operations.
+(defun c:L0 ( / *error* ss count oldEcho )
+  (defun *error* (msg)
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
+      (princ (strcat "\n[L0] Error: " msg))
+    )
+    (princ)
+  )
+
+  (setq oldEcho (getvar "CMDECHO"))
+  (setvar "CMDECHO" 0)
+
+  ;; Ensure Layer "0" is ready (unlocked, thawed, ON)
+  (if (boundp 'CadSetup:EnsureLayerReady)
+    (CadSetup:EnsureLayerReady "0")
+  )
+
+  ;; Step 1: Detect active selection (Pickfirst) or prompt user
+  (setq ss (ssget "_I"))
+  (if (or (null ss) (= (sslength ss) 0))
+    (progn
+      (princ "\nSelect objects to reset to Layer 0 & ByLayer (or press Enter to switch active layer only): ")
+      (setq ss (ssget))
+    )
+  )
+
+  ;; Step 2: Normalize selected geometry if any
+  (if (and ss (> (sslength ss) 0))
+    (if (boundp 'CadSetup:NormalizeToLayer0ByLayer)
+      (CadSetup:NormalizeToLayer0ByLayer ss T)
+    )
+  )
+
+  ;; Step 3: Switch current drafting layer and object defaults
+  (setvar "CLAYER" "0")
+  (setvar "CECOLOR" "BYLAYER")
+  (setvar "CELTYPE" "BYLAYER")
+  (setvar "CELWEIGHT" -1)
+
+  (if ss (sssetfirst nil ss))
+
+  (princ "\n[L0] Active layer set to \"0\". Defaults locked to ByLayer.")
+  (setvar "CMDECHO" oldEcho)
+  (princ)
+)
+
+(defun c:0   () (c:L0))
+(defun c:BY0 () (c:L0))
 
 
 ;;; --------------------------------------------------------------------------
@@ -3459,6 +3571,6 @@
 
 
 (if *CadSetup-Debug*
-  (princ "\n[01_Workflow-Keys.lsp] Workflow keys (1=HL, 2=VP, 3=GL, 4=LL, 5=ML, 6=AD, 7=HD, 8=BL, `=R-) loaded.")
+  (princ "\n[01_Workflow-Keys.lsp] Workflow keys (0=L0, 1=HL, 2=VP, 3=GL, 4=LL, 5=ML, 6=AD, 7=HD, 8=BL, `=R-) loaded.")
 )
 (princ)

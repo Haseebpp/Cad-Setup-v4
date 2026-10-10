@@ -203,21 +203,57 @@
 ;;; 4. LAYER SELECTION & STATE TOOLS
 ;;; --------------------------------------------------------------------------
 
-;; L0 : Switch active layer to "0" immediately
-(defun c:L0 ( / *error* )
-  (defun *error* (msg)
-    (CadSetup:UndoReset)
-    (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
-      (princ (strcat "\n[L0] Error: " msg))
-    )
-    (princ)
-  )
+;; L0 / 0 / BY0 : Workflow Key 0 - Layer 0 & ByLayer Normalizer
+;; Preserves 01_Workflow-Keys.lsp definition if already loaded; otherwise provides full normalizer
+(if (not (fboundp 'c:L0))
+  (progn
+    (defun c:L0 ( / *error* ss oldEcho )
+      (defun *error* (msg)
+        (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+        (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
+          (princ (strcat "\n[L0] Error: " msg))
+        )
+        (princ)
+      )
 
-  (CadSetup:UndoStart)
-  (CadSetup:SetCurrentLayerSafe "0")
-  (CadSetup:UndoEnd)
-  (princ "\n[L0] Current Layer is now: \"0\"")
-  (princ)
+      (setq oldEcho (getvar "CMDECHO"))
+      (setvar "CMDECHO" 0)
+
+      (if (boundp 'CadSetup:EnsureLayerReady)
+        (CadSetup:EnsureLayerReady "0")
+      )
+
+      ;; Step 1: Detect active selection (Pickfirst) or prompt user
+      (setq ss (ssget "_I"))
+      (if (or (null ss) (= (sslength ss) 0))
+        (progn
+          (princ "\nSelect objects to reset to Layer 0 & ByLayer (or press Enter to switch active layer only): ")
+          (setq ss (ssget))
+        )
+      )
+
+      ;; Step 2: Normalize selected geometry if any
+      (if (and ss (> (sslength ss) 0))
+        (if (boundp 'CadSetup:NormalizeToLayer0ByLayer)
+          (CadSetup:NormalizeToLayer0ByLayer ss T)
+        )
+      )
+
+      ;; Step 3: Switch current drafting layer and object defaults
+      (setvar "CLAYER" "0")
+      (setvar "CECOLOR" "BYLAYER")
+      (setvar "CELTYPE" "BYLAYER")
+      (setvar "CELWEIGHT" -1)
+
+      (if ss (sssetfirst nil ss))
+
+      (princ "\n[L0] Active layer set to \"0\". Defaults locked to ByLayer.")
+      (setvar "CMDECHO" oldEcho)
+      (princ)
+    )
+    (defun c:0   () (c:L0))
+    (defun c:BY0 () (c:L0))
+  )
 )
 
 ;; TOGGLE-HELP-LINE / THL / /

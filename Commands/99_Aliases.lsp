@@ -347,7 +347,9 @@
 (defun c:QS  () (initcommandversion) (command "_.QSAVE")       (princ)) ; QS  -> Quick Save current drawing without prompt
 (defun c:CL  () (initcommandversion) (command "_.CLOSE")       (princ)) ; CL  -> Close current active drawing window
 
-;;; --- LAYER & VISIBILITY TOGGLES --------------------------------------------
+;;; --- LAYER & VISIBILITY TOGGLES & WORKFLOW RESET ---------------------------
+(defun c:0   () (c:L0))               ; 0   -> Workflow Key 0: Layer 0 & ByLayer Normalizer
+(defun c:BY0 () (c:L0))               ; BY0 -> Mnemonic alias for Layer 0 & ByLayer Normalizer
 (defun c:/   () (c:TOGGLE-HELP-LINE)) ; /   -> Toggle 01-HELP-LINE layer ON/OFF
 (defun c:1M  () (c:HLMODE))           ; 1M  -> Switch Help Line Mode (0=Points, 1=Lines, 2=Xlines)
 (defun c:1X  () (c:TOGGLE-HLMODE-1-2)); 1X  -> Toggle Help Line Mode between 1 (Lines) and 2 (Xlines)

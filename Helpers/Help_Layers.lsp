@@ -293,9 +293,10 @@
 ;; Unlocks target layer if locked, handles locked source layers, preserves CLAYER, retains active selection.
 ;; Parameters:
 ;;   ss      : Selection set (pickset) or list of enames
-;;   layName : Target layer name string (e.g. "R-LINE-VISB", "01-HELP-LINE")
+;;   layName : Target layer name string (e.g. "R-LINE-VISB", "01-HELP-LINE", "R-MAT-WOOD-SOLID")
 ;; Returns integer count of modified entities, or nil on failure.
-(defun CadSetup:AssignEntitiesToLayer (ss layName / *error* acadApp doc count i ent obj res ssRet)
+(defun CadSetup:AssignEntitiesToLayer (ss layName / *error* acadApp doc count hatchCount i ent obj res ssRet
+                                                    dbRow hPat hScl doAutoHatch hObj)
   (defun *error* (msg)
     (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
     (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
@@ -322,11 +323,27 @@
           (if (boundp 'CadSetup:EnsureLayerReady)
             (CadSetup:EnsureLayerReady layName)
           )
+
+          ;; Check if target layer has an auto-hatch definition in Db_Layers.lsp
+          (setq dbRow (if (boundp 'CadSetup:GetLayerData) (CadSetup:GetLayerData layName) nil))
+          (if (null dbRow)
+            (setq dbRow (assoc (strcase layName) (if (boundp '*CadSetup-Layers-Data*) *CadSetup-Layers-Data* nil)))
+          )
+          (setq hPat (if (and dbRow (nth 6 dbRow)) (vl-princ-to-string (nth 6 dbRow)) "NONE")
+                hScl (if (and dbRow (numberp (nth 7 dbRow))) (nth 7 dbRow) 1.0))
+
+          (setq doAutoHatch (and (boundp '*CadSetup-AutoHatch-Enabled*)
+                                 *CadSetup-AutoHatch-Enabled*
+                                 hPat
+                                 (/= (strcase hPat) "NONE")
+                                 (/= hPat "")))
+
           (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
-          (setq count   0
-                i       0
-                acadApp (vlax-get-acad-object)
-                doc     (if acadApp (vla-get-activedocument acadApp)))
+          (setq count      0
+                hatchCount 0
+                i          0
+                acadApp    (vlax-get-acad-object)
+                doc        (if acadApp (vla-get-activedocument acadApp)))
 
           (cond
             ((= (type ss) 'PICKSET)
@@ -345,6 +362,13 @@
                      )
                    )
                    (setq count (1+ count))
+
+                   ;; Auto-hatch closed boundaries if enabled
+                   (if (and doAutoHatch (boundp 'CadSetup:HatchBoundaryWithMaterial))
+                     (if (setq hObj (CadSetup:HatchBoundaryWithMaterial obj layName))
+                       (setq hatchCount (1+ hatchCount))
+                     )
+                   )
                  )
                )
                (setq i (1+ i))
@@ -368,6 +392,13 @@
                      )
                    )
                    (setq count (1+ count))
+
+                   ;; Auto-hatch closed boundaries if enabled
+                   (if (and doAutoHatch (boundp 'CadSetup:HatchBoundaryWithMaterial))
+                     (if (setq hObj (CadSetup:HatchBoundaryWithMaterial obj layName))
+                       (setq hatchCount (1+ hatchCount))
+                     )
+                   )
                  )
                )
              )
@@ -388,12 +419,215 @@
           )
 
           (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
-          (princ (strcat "\n[OK] " (itoa count) " object(s) assigned to layer: \"" layName "\"."))
+
+          (if (> hatchCount 0)
+            (princ (strcat "\n[OK] " (itoa count) " object(s) assigned to \"" layName "\". "
+                           (itoa hatchCount) " closed boundary(ies) auto-hatched with " hPat " (Scale " (rtos hScl 2 2) ")."))
+            (princ (strcat "\n[OK] " (itoa count) " object(s) assigned to layer: \"" layName "\"."))
+          )
           count
         )
       )
     )
     nil
+  )
+)
+
+;;; ===========================================================================
+;;; LAYER 0 & BYLAYER NORMALIZATION ENGINE
+;;; ===========================================================================
+
+;; CadSetup:NormalizeToLayer0ByLayer - Deep normalizer to Layer 0 & ByLayer
+;; Parameters:
+;;   ss         : Selection set (pickset) or list of enames / vla-objects
+;;   deepBlocks : Boolean (T = deeply normalize nested entities in block definitions)
+;; Returns integer count of modified top-level entities, or 0 on failure.
+(defun CadSetup:NormalizeToLayer0ByLayer (ss deepBlocks /
+                                         *error* acadApp doc blocks processedBlocks
+                                         count i ent obj res ssRet atts
+                                         ResetObjProps CleanBlockDef)
+  (defun *error* (msg)
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
+      (princ (strcat "\n[NormalizeToLayer0] Error: " msg))
+    )
+    (princ)
+  )
+
+  (if (null ss)
+    0
+    (progn
+      ;; Ensure Layer 0 exists, is thawed, ON, and unlocked
+      (if (boundp 'CadSetup:EnsureLayerReady)
+        (CadSetup:EnsureLayerReady "0")
+      )
+
+      (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
+
+      (setq count           0
+            i               0
+            processedBlocks nil
+            acadApp         (if (boundp 'CadSetup:GetAcad) (CadSetup:GetAcad) (vlax-get-acad-object))
+            doc             (if (boundp 'CadSetup:GetDoc)  (CadSetup:GetDoc)  (if acadApp (vla-get-activedocument acadApp)))
+            blocks          (if doc (vla-get-blocks doc) nil))
+
+      ;; Local function: Reset all standard properties of a VLA entity to Layer 0 & ByLayer
+      (defun ResetObjProps (o / resPut)
+        (if (and o (not (vl-catch-all-error-p o)) (= (type o) 'VLA-OBJECT))
+          (progn
+            ;; Target Layer: "0"
+            (setq resPut (vl-catch-all-apply 'vla-put-layer (list o "0")))
+            (if (vl-catch-all-error-p resPut)
+              (progn
+                (if (and (vlax-property-available-p o 'Layer) (boundp 'CadSetup:EnsureLayerReady))
+                  (CadSetup:EnsureLayerReady (vla-get-layer o))
+                )
+                (vl-catch-all-apply 'vla-put-layer (list o "0"))
+              )
+            )
+            ;; Color: 256 (acByLayer)
+            (vl-catch-all-apply 'vla-put-color (list o 256))
+            ;; Linetype: "ByLayer"
+            (vl-catch-all-apply 'vla-put-linetype (list o "ByLayer"))
+            ;; Lineweight: -1 (acLnWtByLayer)
+            (vl-catch-all-apply 'vla-put-lineweight (list o -1))
+            ;; Transparency: "ByLayer"
+            (vl-catch-all-apply 'vla-put-transparency (list o "ByLayer"))
+            ;; PlotStyleName: "ByLayer" (safe catch for CTB mode)
+            (vl-catch-all-apply 'vla-put-plotstylename (list o "ByLayer"))
+            ;; Material: "ByLayer"
+            (vl-catch-all-apply 'vla-put-material (list o "ByLayer"))
+            T
+          )
+          nil
+        )
+      )
+
+      ;; Local recursive function: Recursively clean block definitions and nested sub-entities
+      (defun CleanBlockDef (bName / blkDef subObj subName effName)
+        (if (and bName
+                 (= (type bName) 'STR)
+                 (> (strlen bName) 0)
+                 blocks
+                 (not (member (strcase bName) processedBlocks)))
+          (progn
+            (setq processedBlocks (cons (strcase bName) processedBlocks))
+            (setq blkDef (vl-catch-all-apply 'vla-item (list blocks bName)))
+            (if (and (not (vl-catch-all-error-p blkDef)) blkDef)
+              (vlax-for subObj blkDef
+                (ResetObjProps subObj)
+                (setq subName (vla-get-objectname subObj))
+                (if (= subName "AcDbBlockReference")
+                  (progn
+                    (if (vlax-property-available-p subObj 'effectivename)
+                      (setq effName (vla-get-effectivename subObj))
+                      (setq effName (vla-get-name subObj))
+                    )
+                    (if effName (CleanBlockDef effName))
+                    (CleanBlockDef (vla-get-name subObj))
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+
+      ;; Process selection set
+      (cond
+        ((= (type ss) 'PICKSET)
+         (while (< i (sslength ss))
+           (setq ent (ssname ss i))
+           (setq obj (vl-catch-all-apply 'vlax-ename->vla-object (list ent)))
+           (if (and (not (vl-catch-all-error-p obj)) (= (type obj) 'VLA-OBJECT))
+             (progn
+               (if (ResetObjProps obj)
+                 (setq count (1+ count))
+               )
+               ;; Reset block attributes if block reference
+               (if (and (= (vla-get-objectname obj) "AcDbBlockReference")
+                        (= (vla-get-hasattributes obj) :vlax-true))
+                 (progn
+                   (setq atts (vl-catch-all-apply 'vlax-invoke (list obj 'getattributes)))
+                   (if (and (not (vl-catch-all-error-p atts)) (listp atts))
+                     (foreach att atts (ResetObjProps att))
+                   )
+                 )
+               )
+               ;; Deep recursive cleaning of block definitions
+               (if (and deepBlocks (= (vla-get-objectname obj) "AcDbBlockReference"))
+                 (progn
+                   (if (vlax-property-available-p obj 'effectivename)
+                     (CleanBlockDef (vla-get-effectivename obj))
+                   )
+                   (CleanBlockDef (vla-get-name obj))
+                 )
+               )
+             )
+           )
+           (setq i (1+ i))
+         )
+        )
+        ((listp ss)
+         (foreach ent ss
+           (if (= (type ent) 'ENAME)
+             (setq obj (vl-catch-all-apply 'vlax-ename->vla-object (list ent)))
+             (if (= (type ent) 'VLA-OBJECT) (setq obj ent) (setq obj nil))
+           )
+           (if (and obj (not (vl-catch-all-error-p obj)) (= (type obj) 'VLA-OBJECT))
+             (progn
+               (if (ResetObjProps obj)
+                 (setq count (1+ count))
+               )
+               (if (and (= (vla-get-objectname obj) "AcDbBlockReference")
+                        (= (vla-get-hasattributes obj) :vlax-true))
+                 (progn
+                   (setq atts (vl-catch-all-apply 'vlax-invoke (list obj 'getattributes)))
+                   (if (and (not (vl-catch-all-error-p atts)) (listp atts))
+                     (foreach att atts (ResetObjProps att))
+                   )
+                 )
+               )
+               (if (and deepBlocks (= (vla-get-objectname obj) "AcDbBlockReference"))
+                 (progn
+                   (if (vlax-property-available-p obj 'effectivename)
+                     (CleanBlockDef (vla-get-effectivename obj))
+                   )
+                   (CleanBlockDef (vla-get-name obj))
+                 )
+               )
+             )
+           )
+         )
+        )
+      )
+
+      ;; Regenerate viewports if any block definitions were modified
+      (if (and doc processedBlocks (> (length processedBlocks) 0))
+        (vl-catch-all-apply 'vla-regen (list doc (if (boundp 'acAllViewports) acAllViewports 1)))
+      )
+
+      ;; Retain selection for follow-up commands (Move, Copy, Scale, etc.)
+      (cond
+        ((= (type ss) 'PICKSET)
+         (sssetfirst nil ss))
+        ((listp ss)
+         (setq ssRet (ssadd))
+         (foreach ent ss
+           (if (= (type ent) 'ENAME) (ssadd ent ssRet))
+         )
+         (if (> (sslength ssRet) 0) (sssetfirst nil ssRet))
+        )
+      )
+
+      (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+
+      (princ (strcat "\n[L0] " (itoa count) " object(s) reset to Layer \"0\" with properties set to ByLayer."))
+      (if (and processedBlocks (> (length processedBlocks) 0))
+        (princ (strcat "\n[L0] " (itoa (length processedBlocks)) " block definition(s) deeply normalized."))
+      )
+      count
+    )
   )
 )
 

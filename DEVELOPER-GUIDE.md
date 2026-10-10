@@ -161,7 +161,7 @@ Use this pattern when the command delegates to a native AutoCAD interactive comm
 
 ### Recipe 1: How to Add a New AutoCAD Command
 1. Determine which command file in `Commands/` fits the functional category:
-   - `01_Workflow-Keys.lsp`: Single-key hotkeys (1=HL, 2=VP, 3=GL, 4=LL, 5=ML, 6=AD, 7=HD, 8=BL, `=R-)
+   - `01_Workflow-Keys.lsp`: Single-key hotkeys (0=L0, 1=HL, 2=VP, 3=GL, 4=LL, 5=ML, 6=AD, 7=HD, 8=BL, `=R-)
    - `02_Layers.lsp`: Quick layer operations (`RL`, `DCL`, `L0`, `BLL`)
    - `03_Blocks.lsp`: Block generation, rotation, alignment (`CB`, `OB`, `RB`, `BL`)
    - `04_Layout-Views.lsp`: Sheet, viewport, and presentation tools (`TS`, `A3SERIES`, `VPCLIPRECTANGLE`, `VR`)

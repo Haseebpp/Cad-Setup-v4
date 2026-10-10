@@ -52,7 +52,9 @@
 (defun c:CP  () (initcommandversion) (command "_.COPY" "_P" "")(princ)); CP  -> Copy previously selected set
 (defun c:CS  () (c:COPYSEG))                                           ; CS  -> Copy polyline segment with live drag (COPYSEG)
 (defun c:RR  () (initcommandversion) (command "_.ROTATE")     (princ)) ; RR  -> Rotate objects around a basepoint
+(defun c:HR  () (c:HROT))                                             ; HR  -> Rotate hatch patterns in selection (HROT)
 (defun c:SC  () (initcommandversion) (command "_.SCALE")      (princ)) ; SC  -> Scale objects uniformly
+(defun c:HSC () (c:HSCALE))                                           ; HSC -> Multiply hatch scale of selected hatches (HSCALE)
 ;; (defun c:MI  () (initcommandversion) (command "_.MIRROR")     (princ)) ; MI  -> Mirror objects (retain source)
 (defun c:AL  () (initcommandversion) (command "_.ALIGN")      (princ)) ; AL  -> Align 2D/3D objects with source/target points
 (defun c:AR  () (initcommandversion) (command "_.ARRAY") (princ)) ; AR  -> Modern Associative Array Ribbon
@@ -320,6 +322,7 @@
 ;;; --- BLOCKS & EXTERNAL REFERENCES -----------------------------------------
 (defun c:B   () (initcommandversion) (initdia) (command "_.BLOCK") (princ)) ; B   -> Open Block Definition creation dialog
 (defun c:I   () (initcommandversion) (command "_.INSERT") (princ)) ; I   -> Launch Modern Block Insertion palette
+(defun c:G   () (c:GB))                                                ; G   -> Group Block at Origin (GB)
 
 ;;; --- ZOOM & VIEW SHORTCUTS ------------------------------------------------
 (defun c:ZE  () (initcommandversion) (command "_.ZOOM" "_E")   (princ)) ; ZE  -> Zoom Extents (fits all geometry to screen)

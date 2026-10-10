@@ -30,11 +30,11 @@ To prevent symbol collision across files and ensure clean maintainability:
 
 | Element | Pattern | Example | Rationale |
 | :--- | :--- | :--- | :--- |
-| **AutoCAD Commands** | `c:NAME` (Uppercase) | `c:HL`, `c:CB`, `c:CAD-SETTINGS` | Standard AutoCAD command registration |
+| **AutoCAD Commands** | `c:NAME` (Uppercase) | `c:HL`, `c:GB`, `c:CAD-SETTINGS` | Standard AutoCAD command registration |
 | **Global Helper Functions**| `CadSetup:VerbNoun` | `CadSetup:GetBoundingBoxUcs`, `CadSetup:EnsureLayerFromDb` | Namespaced with prefix, PascalCase |
 | **Global Data Tables** | `*CadSetup-Noun-Data*` | `*CadSetup-Layers-Data*`, `*CadSetup-SysVars-Data*` | Asterisk-wrapped earmuffs |
 | **Local Variables** | `camelCase` or `kebab-case` | `minPt`, `oldEcho`, `base-pt` | Kept local in `/ ...` parameter list |
-| **Command Aliases** | 1 to 3 characters | `1`, `2`, `CB`, `TC`, `TS`, `RL` | Ergonomic drafting keystrokes |
+| **Command Aliases** | 1 to 3 characters | `1`, `2`, `G`/`GB`, `DB`, `TC`, `TS`, `RL` | Ergonomic drafting keystrokes |
 
 ---
 
@@ -166,7 +166,7 @@ Use this pattern when the command delegates to a native AutoCAD interactive comm
    - `03_Blocks.lsp`: Block generation, rotation, alignment (`CB`, `OB`, `RB`, `BL`)
    - `04_Layout-Views.lsp`: Sheet, viewport, and presentation tools (`TS`, `A3SERIES`, `VPCLIPRECTANGLE`, `VR`)
    - `05_Selection-Filters.lsp`: Fast entity filters (`ssget` wrappers: `SR`, `SL`, `SB`, `SH`, `SA`, `SW`)
-   - `06_Utilities.lsp`: Calculation, cleanup, repair (`TC`, `BBOX`, `CTRANS`, `FL0`, `WF`, `WR`, `LST`)
+   - `06_Utilities.lsp`: Calculation, cleanup, repair (`TC`, `BBOX`, `CTRANS`, `FL0`, `HSCALE`/`HSC`, `HROT`/`HR`, `WF`, `WR`, `LST`)
    - `07_Copy-Utilities.lsp`: Smart duplication & cloning (`CIP`, `COPYSEG`/`CS`)
    - `08_Dynamic-Stretch.lsp`: Multi-boundary dynamic stretch (`DYNSTRETCH`, `DS`)
    - `99_Aliases.lsp`: Native AutoCAD alias remappings and macro actions

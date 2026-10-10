@@ -7,17 +7,126 @@
 (vl-load-com)
 
 ;;; --------------------------------------------------------------------------
-;;; 1. AUTO BLOCK CREATION (WITH TIMESTAMP & SMART BASE POINT)
+;;; 1. AUTO BLOCK CREATION & VERSION ENGINE (GB, DB, UB)
 ;;; --------------------------------------------------------------------------
 
-;; CB / G : Auto-create block with timestamp name and Bottom-Left base point
-(defun c:CB (/ *error* ss bbox blkName baseName count basePt oldCmd oldAtt)
+;; CadSetup:FormatBlockTimestamp - Formats current date/time to "DD.MM.YYYY@HH.MM.SS"
+(defun CadSetup:FormatBlockTimestamp ( / oldDimzin cdate dotPos dPart tPart y m d hr mi se )
+  (setq oldDimzin (getvar "DIMZIN"))
+  (setvar "DIMZIN" 0)
+  (setq cdate (rtos (getvar "CDATE") 2 6))
+  (setvar "DIMZIN" oldDimzin)
+  (setq dotPos (vl-string-search "." cdate))
+  (if dotPos
+    (progn
+      (setq dPart (substr cdate 1 dotPos)
+            tPart (substr cdate (+ dotPos 2)))
+      (while (< (strlen dPart) 8) (setq dPart (strcat "0" dPart)))
+      (while (< (strlen tPart) 6) (setq tPart (strcat tPart "0")))
+      (setq y  (substr dPart 1 4)
+            m  (substr dPart 5 2)
+            d  (substr dPart 7 2)
+            hr (substr tPart 1 2)
+            mi (substr tPart 3 2)
+            se (substr tPart 5 2))
+      (strcat d "." m "." y "@" hr "." mi "." se)
+    )
+    (menucmd "M=$(edtime,$(getvar,date),DD.MO.YYYY@HH.MM.SS)")
+  )
+)
+
+;; CadSetup:GetNextDbHandle - Retrieves next CAD engine database handle padded to 8 hex chars with "$"
+(defun CadSetup:GetNextDbHandle ( / h pEnt )
+  (setq h (getvar "HANDSEED"))
+  (if (or (null h) (not (= (type h) 'STR)) (= h ""))
+    ;; Fallback: query engine via transient entity if HANDSEED is unpopulated in current runtime
+    (if (setq pEnt (entmake '((0 . "POINT") (10 0.0 0.0 0.0))))
+      (progn
+        (setq pEnt (entlast))
+        (setq h (cdr (assoc 5 (entget pEnt))))
+        (entdel pEnt)
+      )
+    )
+  )
+  (if (or (null h) (= h ""))
+    (setq h "00000001")
+  )
+  (setq h (strcase h))
+  (while (< (strlen h) 8)
+    (setq h (strcat "0" h))
+  )
+  (strcat "$" h)
+)
+
+;; CadSetup:FormatVersion - Formats integer version to 2-digit string prefixed with "v" (e.g. 1 -> "v01")
+(defun CadSetup:FormatVersion (v / vStr)
+  (setq vStr (itoa (max 1 v)))
+  (if (< (strlen vStr) 2)
+    (setq vStr (strcat "0" vStr))
+  )
+  (strcat "v" vStr)
+)
+
+;; CadSetup:BuildBlockName - Assembles standard block name: TYPE[$HANDLE.vXX]_MOD[...]__INIT[...]
+(defun CadSetup:BuildBlockName (typeTag handleStr versionNum modStamp initStamp)
+  (strcat typeTag "[" handleStr "." (CadSetup:FormatVersion versionNum) "]_MOD[" modStamp "]_INIT[" initStamp "]")
+)
+
+;; CadSetup:ParseBlockName - Deconstructs a standard block name into an alist or returns nil
+(defun CadSetup:ParseBlockName (blkName / pMod pInit pB1 pDot pB2 typeTag handleStr verStr verNum modStamp initStamp)
+  (setq pMod  (vl-string-search "_MOD[" blkName)
+        pInit (vl-string-search "_INIT[" blkName)
+        pB1   (vl-string-search "[" blkName)
+        pDot  (vl-string-search "." blkName)
+        pB2   (vl-string-search "]" blkName))
+  (if (and pMod pInit pB1 pDot pB2
+           (< pB1 pDot)
+           (< pDot pB2)
+           (< pB2 pMod)
+           (< pMod pInit))
+    (progn
+      (setq typeTag   (substr blkName 1 pB1)
+            handleStr (substr blkName (+ pB1 2) (- pDot (+ pB1 1)))
+            verStr    (substr blkName (+ pDot 2) (- pB2 (+ pDot 1)))
+            modStamp  (substr blkName (+ pMod 6) (- pInit (+ pMod 6 1)))
+            initStamp (substr blkName (+ pInit 7) (- (strlen blkName) (+ pInit 7))))
+      (if (and (> (strlen verStr) 1) (wcmatch (strcase verStr) "V*"))
+        (setq verNum (atoi (substr verStr 2)))
+        (setq verNum (atoi verStr))
+      )
+      (list (cons 'TYPE typeTag)
+            (cons 'HANDLE handleStr)
+            (cons 'VERSION verNum)
+            (cons 'MOD modStamp)
+            (cons 'INIT initStamp))
+    )
+    nil
+  )
+)
+
+;; CadSetup:EnsureUniqueBlockName - Guarantees block name does not collide with existing definitions
+(defun CadSetup:EnsureUniqueBlockName (blkName / baseName count)
+  (if (tblsearch "BLOCK" blkName)
+    (progn
+      (setq baseName blkName
+            count 1)
+      (while (tblsearch "BLOCK" (strcat baseName "_" (itoa count)))
+        (setq count (1+ count))
+      )
+      (strcat baseName "_" (itoa count))
+    )
+    blkName
+  )
+)
+
+;; GB : Auto-create block at World Origin (0,0,0) with standard GRP name
+(defun c:GB (/ *error* ss handle ts blkName oldCmd oldAtt)
   (defun *error* (msg)
     (if oldAtt (setvar 'attreq oldAtt))
     (if oldCmd (setvar 'cmdecho oldCmd))
-    (CadSetup:UndoReset)
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
     (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
-      (princ (strcat "\n[CB] Error: " msg))
+      (princ (strcat "\n[GB] Error: " msg))
     )
     (princ)
   )
@@ -30,46 +139,28 @@
   (setq ss (ssget "_I"))
   (if (not ss)
     (progn
-      (princ "\nSelect objects to convert into Block: ")
+      (princ "\nSelect objects to convert into Block at Origin [GB]: ")
       (setq ss (ssget))
     )
   )
 
   (if ss
     (progn
-      (CadSetup:UndoStart)
+      (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
 
-      ;; Compute collective bottom-left bounding coordinate in CURRENT UCS using geometry helper
-      (setq bbox (CadSetup:GetBoundingBoxUcs ss))
-      (if bbox
-        (setq basePt (car bbox))
-        (setq basePt (getvar 'insbase))
-      )
+      (setq handle  (CadSetup:GetNextDbHandle)
+            ts      (CadSetup:FormatBlockTimestamp)
+            blkName (CadSetup:BuildBlockName "GRP" handle 1 ts ts)
+            blkName (CadSetup:EnsureUniqueBlockName blkName))
 
-      ;; Generate unique timestamp name with collision guard
-      (setq blkName (strcat "BLK_" (menucmd "M=$(edtime,$(getvar,date),YYYYMODD_HHMMSS)")))
-      (if (or (null blkName) (= blkName "BLK_"))
-        (setq blkName (strcat "BLK_" (rtos (getvar "CDATE") 2 6)))
-      )
-      (if (tblsearch "BLOCK" blkName)
-        (progn
-          (setq baseName blkName
-                count 1)
-          (while (tblsearch "BLOCK" (strcat baseName "_" (itoa count)))
-            (setq count (1+ count))
-          )
-          (setq blkName (strcat baseName "_" (itoa count)))
-        )
-      )
+      ;; Define block at World Origin (0,0,0) and re-insert in place
+      (command "._-block" blkName "_non" '(0.0 0.0 0.0) ss "")
+      (command "._-insert" blkName "_non" '(0.0 0.0 0.0) 1.0 1.0 0.0)
 
-      ;; Create block and re-insert in place using UCS basePt
-      (command "._-block" blkName "_non" basePt ss "")
-      (command "._-insert" blkName "_non" basePt 1.0 1.0 0.0)
-
-      (CadSetup:UndoEnd)
-      (princ (strcat "\n[CB] Block created: \"" blkName "\" at Bottom-Left base point."))
+      (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+      (princ (strcat "\n[GB] Block created: \"" blkName "\" at World Origin (0,0,0)."))
     )
-    (princ "\n[CB] No objects selected.")
+    (princ "\n[GB] No objects selected.")
   )
 
   (setvar 'attreq oldAtt)
@@ -77,17 +168,17 @@
   (princ)
 )
 
-;; Alias: G for Quick Block
-(defun c:G () (c:CB) (princ))
+;; G : Fast alias for GB (Group Block at World Origin)
+(defun c:G () (c:GB))
 
-;; OB : Auto-create block with timestamp name at Origin (0,0,0)
-(defun c:OB (/ *error* ss blkName baseName count basePt oldCmd oldAtt)
+;; DB : Auto-create block at Bottom-Left (Current UCS) with standard DYN name
+(defun c:DB (/ *error* ss bbox basePt handle ts blkName oldCmd oldAtt)
   (defun *error* (msg)
     (if oldAtt (setvar 'attreq oldAtt))
     (if oldCmd (setvar 'cmdecho oldCmd))
-    (CadSetup:UndoReset)
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
     (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
-      (princ (strcat "\n[OB] Error: " msg))
+      (princ (strcat "\n[DB] Error: " msg))
     )
     (princ)
   )
@@ -100,40 +191,140 @@
   (setq ss (ssget "_I"))
   (if (not ss)
     (progn
-      (princ "\nSelect objects to convert into Block at Origin: ")
+      (princ "\nSelect objects to convert into Block at Bottom-Left [DB]: ")
       (setq ss (ssget))
     )
   )
 
   (if ss
     (progn
-      (CadSetup:UndoStart)
-      (setq basePt '(0.0 0.0 0.0))
-      (setq blkName (strcat "BLK_" (menucmd "M=$(edtime,$(getvar,date),YYYYMODD_HHMMSS)")))
-      (if (or (null blkName) (= blkName "BLK_"))
-        (setq blkName (strcat "BLK_" (rtos (getvar "CDATE") 2 6)))
-      )
-      (if (tblsearch "BLOCK" blkName)
-        (progn
-          (setq baseName blkName
-                count 1)
-          (while (tblsearch "BLOCK" (strcat baseName "_" (itoa count)))
-            (setq count (1+ count))
-          )
-          (setq blkName (strcat baseName "_" (itoa count)))
-        )
+      (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
+
+      ;; Collective bottom-left bounding coordinate in current UCS
+      (setq bbox (if (boundp 'CadSetup:GetBoundingBoxUcs) (CadSetup:GetBoundingBoxUcs ss) nil))
+      (if bbox
+        (setq basePt (car bbox))
+        (setq basePt (getvar 'insbase))
       )
 
+      (setq handle  (CadSetup:GetNextDbHandle)
+            ts      (CadSetup:FormatBlockTimestamp)
+            blkName (CadSetup:BuildBlockName "DYN" handle 1 ts ts)
+            blkName (CadSetup:EnsureUniqueBlockName blkName))
+
+      ;; Define block at Bottom-Left base point and re-insert in place
       (command "._-block" blkName "_non" basePt ss "")
       (command "._-insert" blkName "_non" basePt 1.0 1.0 0.0)
 
-      (CadSetup:UndoEnd)
-      (princ (strcat "\n[OB] Block created: \"" blkName "\" at Origin (0,0,0)."))
+      (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+      (princ (strcat "\n[DB] Block created: \"" blkName "\" at Bottom-Left base point."))
     )
-    (princ "\n[OB] No objects selected.")
+    (princ "\n[DB] No objects selected.")
   )
 
   (setvar 'attreq oldAtt)
+  (setvar 'cmdecho oldCmd)
+  (princ)
+)
+
+;; UB : Update Block / Bump Version (.v01 -> .v02), refresh MOD timestamp, preserve INIT & handle
+(defun c:UB (/ *error* ent ss obj blkName parsed curVer newVer curInit newMod newName
+               typeChoice newType handle oldCmd)
+  (defun *error* (msg)
+    (if oldCmd (setvar 'cmdecho oldCmd))
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[UB] Error: " msg))
+    )
+    (princ)
+  )
+
+  (setq oldCmd (getvar 'cmdecho))
+  (setvar 'cmdecho 0)
+
+  ;; Check pre-selection or prompt for block reference
+  (setq ss (ssget "_I" '((0 . "INSERT"))))
+  (if (and ss (> (sslength ss) 0))
+    (setq ent (ssname ss 0))
+    (progn
+      (setvar 'cmdecho oldCmd)
+      (setq ent (car (entsel "\nSelect block reference to update/bump version [UB]: ")))
+      (setvar 'cmdecho 0)
+    )
+  )
+
+  (if ent
+    (progn
+      (setq d (entget ent))
+      (if (= (cdr (assoc 0 d)) "INSERT")
+        (progn
+          ;; Retrieve effective block definition name (handles dynamic blocks via COM if available, DXF fallback)
+          (setq obj (vl-catch-all-apply 'vlax-ename->vla-object (list ent)))
+          (setq blkName
+            (if (and (not (vl-catch-all-error-p obj)) obj)
+              (if (vlax-property-available-p obj 'EffectiveName)
+                (vla-get-EffectiveName obj)
+                (vla-get-Name obj)
+              )
+              (cdr (assoc 2 d))
+            )
+          )
+
+          (setq parsed (CadSetup:ParseBlockName blkName))
+          (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
+
+          (if parsed
+            ;; 1. Standard GRP/DYN block: Bump version and update MOD timestamp
+            (progn
+              (setq curVer  (cdr (assoc 'VERSION parsed))
+                    newVer  (1+ curVer)
+                    curInit (cdr (assoc 'INIT parsed))
+                    newMod  (CadSetup:FormatBlockTimestamp)
+                    newName (CadSetup:BuildBlockName
+                              (cdr (assoc 'TYPE parsed))
+                              (cdr (assoc 'HANDLE parsed))
+                              newVer
+                              newMod
+                              curInit))
+
+              (command "._-rename" "_block" blkName newName)
+              (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+              (princ (strcat "\n[UB] Block version bumped to ." (CadSetup:FormatVersion newVer) ":"))
+              (princ (strcat "\n     Old: \"" blkName "\""))
+              (princ (strcat "\n     New: \"" newName "\""))
+            )
+            ;; 2. Non-Standard block: Convert to standard naming convention
+            (progn
+              (initget "GRP DYN Cancel")
+              (setq typeChoice (getkword (strcat "\nBlock \"" blkName "\" is non-standard. Convert to [GRP/DYN/Cancel] <GRP>: ")))
+              (if (or (null typeChoice) (= typeChoice "")) (setq typeChoice "GRP"))
+
+              (if (/= typeChoice "Cancel")
+                (progn
+                  (setq handle  (CadSetup:GetNextDbHandle)
+                        newMod  (CadSetup:FormatBlockTimestamp)
+                        newName (CadSetup:BuildBlockName typeChoice handle 1 newMod newMod))
+
+                  (command "._-rename" "_block" blkName newName)
+                  (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+                  (princ (strcat "\n[UB] Non-standard block converted to standard " typeChoice ":"))
+                  (princ (strcat "\n     Old: \"" blkName "\""))
+                  (princ (strcat "\n     New: \"" newName "\""))
+                )
+                (progn
+                  (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+                  (princ "\n[UB] Operation cancelled.")
+                )
+              )
+            )
+          )
+        )
+        (princ "\n[UB] Selected entity is not a block reference.")
+      )
+    )
+    (princ "\n[UB] No block reference selected.")
+  )
+
   (setvar 'cmdecho oldCmd)
   (princ)
 )
@@ -807,6 +998,6 @@
 
 
 (if *CadSetup-Debug*
-  (princ "\n[03_Blocks.lsp] Block creation, transform, and Visual Joinery Palette loaded (CB, OB, RB, RBH/RH, RBV/RV, BL, 8).")
+  (princ "\n[03_Blocks.lsp] Block creation, transform, and Visual Joinery Palette loaded (GB/G, DB, UB, RB, RBH/RH, RBV/RV, BL, 8).")
 )
 (princ)

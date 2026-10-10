@@ -2,7 +2,7 @@
 ;;; 06_Utilities.lsp - Drawing Cleanup, Measurement, System Fixes & Utilities
 ;;; Layer: Commands (Priority 06)
 ;;; Author   : Haseeb
-;;; Commands : TC, BBOX, CTRANS, FL0, PUA (QA), FIXSELECT, FIXBOX, WF, WR, LOAD-STYLES (LST)
+;;; Commands : TC, BBOX, CTRANS, FL0, HSCALE (HSC), HROT (HR), PUA (QA), FIXSELECT, FIXBOX, WF, WR, LOAD-STYLES (LST)
 ;;; ==========================================================================
 
 (vl-load-com)
@@ -150,6 +150,324 @@
   (setvar "CMDECHO" oldecho)
   (princ)
 )
+
+;; HSC / HSCALE : Multiply Hatch Scale by an Input Factor
+(defun c:HSCALE ( / *error* oldCmd ss factor i ent obj patName patType curVal newVal
+                    scaledCount solidCount lockedCount totalCount hasHatch err )
+  (setq oldCmd (getvar "CMDECHO"))
+
+  ;; 1. Localized Error Handler & Safe Stack Reset
+  (defun *error* (msg)
+    (if oldCmd (setvar "CMDECHO" oldCmd))
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[HSCALE] Error: " msg))
+    )
+    (princ)
+  )
+
+  (setvar "CMDECHO" 0)
+
+  ;; 2. Get Selection (Support Noun/Verb pre-selection or interactive prompt)
+  (setq ss (ssget "_I"))
+  (if ss
+    (sssetfirst nil nil) ; Clear active grip selection for clean command interaction
+    (progn
+      (princ "\nSelect hatches to scale (or window containing hatches): ")
+      (setq ss (ssget))
+    )
+  )
+
+  (if (not ss)
+    (princ "\n[HSCALE] No objects selected.")
+    (progn
+      ;; 3. Scan selection to ensure at least one hatch is present
+      (setq totalCount (sslength ss)
+            i 0
+            hasHatch nil)
+      (while (and (< i totalCount) (not hasHatch))
+        (setq ent (ssname ss i))
+        (if (= (cdr (assoc 0 (entget ent))) "HATCH")
+          (setq hasHatch T)
+        )
+        (setq i (1+ i))
+      )
+
+      (if (not hasHatch)
+        (princ "\n[HSCALE] No hatch entities found in selection.")
+        (progn
+          ;; 4. Prompt for Scale Multiplier (Disallow <= 0, remember session default)
+          (if (not (and (boundp '*CadSetup-HatchScaleFactor*)
+                        (numberp *CadSetup-HatchScaleFactor*)
+                        (> *CadSetup-HatchScaleFactor* 0)))
+            (setq *CadSetup-HatchScaleFactor* 2.0)
+          )
+          (initget 6) ; Bit 2 (no 0) + Bit 4 (no negative numbers)
+          (setq factor (getreal (strcat "\nEnter hatch scale multiplier <"
+                                        (rtos *CadSetup-HatchScaleFactor* 2 2)
+                                        ">: ")))
+          (if (null factor)
+            (setq factor *CadSetup-HatchScaleFactor*)
+            (setq *CadSetup-HatchScaleFactor* factor)
+          )
+
+          ;; 5. Begin Atomic Undo Transaction
+          (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
+
+          (setq scaledCount 0
+                solidCount  0
+                lockedCount 0
+                i           0)
+
+          ;; 6. Process Entities
+          (while (< i totalCount)
+            (setq ent (ssname ss i)
+                  i   (1+ i))
+            (if (= (cdr (assoc 0 (entget ent))) "HATCH")
+              (progn
+                (setq obj (vl-catch-all-apply 'vlax-ename->vla-object (list ent)))
+                (if (and obj (not (vl-catch-all-error-p obj)))
+                  (progn
+                    (setq patName (strcase (vl-catch-all-apply 'vla-get-PatternName (list obj))))
+                    (if (vl-catch-all-error-p patName) (setq patName ""))
+
+                    ;; Detect solid fills or gradient objects (which do not support pattern scale)
+                    (if (or (= patName "SOLID")
+                            (and (vlax-property-available-p obj 'HatchObjectType)
+                                 (= (vla-get-HatchObjectType obj) 1)))
+                      (setq solidCount (1+ solidCount))
+                      (progn
+                        ;; Determine pattern type: 1 = UserDefined (PatternSpace), else PatternScale
+                        (setq patType (vl-catch-all-apply 'vla-get-PatternType (list obj)))
+                        (if (and (not (vl-catch-all-error-p patType)) (= patType 1))
+                          ;; User-defined pattern -> multiply line spacing (PatternSpace)
+                          (progn
+                            (setq curVal (vl-catch-all-apply 'vla-get-PatternSpace (list obj)))
+                            (if (and (numberp curVal) (> curVal 0))
+                              (progn
+                                (setq newVal (* curVal factor))
+                                (setq err (vl-catch-all-apply 'vla-put-PatternSpace (list obj newVal)))
+                                (if (vl-catch-all-error-p err)
+                                  (setq lockedCount (1+ lockedCount))
+                                  (progn
+                                    (vl-catch-all-apply 'vla-Evaluate (list obj))
+                                    (setq scaledCount (1+ scaledCount))
+                                  )
+                                )
+                              )
+                            )
+                          )
+                          ;; Predefined or Custom pattern -> multiply PatternScale
+                          (progn
+                            (setq curVal (vl-catch-all-apply 'vla-get-PatternScale (list obj)))
+                            (if (and (numberp curVal) (> curVal 0))
+                              (progn
+                                (setq newVal (* curVal factor))
+                                (setq err (vl-catch-all-apply 'vla-put-PatternScale (list obj newVal)))
+                                (if (vl-catch-all-error-p err)
+                                  (setq lockedCount (1+ lockedCount))
+                                  (progn
+                                    (vl-catch-all-apply 'vla-Evaluate (list obj))
+                                    (setq scaledCount (1+ scaledCount))
+                                  )
+                                )
+                              )
+                            )
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+
+          ;; 7. Close Atomic Undo Transaction
+          (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+
+          ;; 8. User Feedback Summary
+          (princ (strcat "\n[HSCALE] Scaled " (itoa scaledCount) " hatch(es) by multiplier " (rtos factor 2 2) "."))
+          (if (> solidCount 0)
+            (princ (strcat " (" (itoa solidCount) " solid/gradient fill(s) skipped)"))
+          )
+          (if (> lockedCount 0)
+            (princ (strcat " (" (itoa lockedCount) " hatch(es) on locked layers skipped)"))
+          )
+        )
+      )
+    )
+  )
+
+  (setvar "CMDECHO" oldCmd)
+  (princ)
+)
+
+;; Command alias
+(defun c:HSC () (c:HSCALE))
+
+;; HR / HROT / HROTATE : Rotate Selected Hatches (Relative Delta or Absolute Angle)
+(defun c:HROT ( / *error* oldCmd ss inp isAbsolute deltaAngle absAngle i ent obj patName
+                  curAngleRad curAngleDeg newAngleDeg newAngleRad scaledCount solidCount
+                  lockedCount totalCount hasHatch err )
+  (setq oldCmd (getvar "CMDECHO"))
+
+  ;; 1. Localized Error Handler & Safe Stack Reset
+  (defun *error* (msg)
+    (if oldCmd (setvar "CMDECHO" oldCmd))
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[HROT] Error: " msg))
+    )
+    (princ)
+  )
+
+  (setvar "CMDECHO" 0)
+
+  ;; 2. Get Selection (Support Noun/Verb pre-selection or interactive prompt)
+  (setq ss (ssget "_I"))
+  (if ss
+    (sssetfirst nil nil) ; Clear active grip selection for clean command interaction
+    (progn
+      (princ "\nSelect hatches to rotate (or window containing hatches): ")
+      (setq ss (ssget))
+    )
+  )
+
+  (if (not ss)
+    (princ "\n[HROT] No objects selected.")
+    (progn
+      ;; 3. Scan selection to ensure at least one hatch is present
+      (setq totalCount (sslength ss)
+            i 0
+            hasHatch nil)
+      (while (and (< i totalCount) (not hasHatch))
+        (setq ent (ssname ss i))
+        (if (= (cdr (assoc 0 (entget ent))) "HATCH")
+          (setq hasHatch T)
+        )
+        (setq i (1+ i))
+      )
+
+      (if (not hasHatch)
+        (princ "\n[HROT] No hatch entities found in selection.")
+        (progn
+          ;; 4. Initialize session defaults
+          (if (not (and (boundp '*CadSetup-HatchRotDelta*)
+                        (numberp *CadSetup-HatchRotDelta*)))
+            (setq *CadSetup-HatchRotDelta* 45.0)
+          )
+          (if (not (and (boundp '*CadSetup-HatchRotAbs*)
+                        (numberp *CadSetup-HatchRotAbs*)))
+            (setq *CadSetup-HatchRotAbs* 0.0)
+          )
+
+          ;; Prompt for rotation delta or [Absolute] keyword
+          (initget "Absolute")
+          (setq inp (getreal (strcat "\nEnter rotation angle to add in degrees or [Absolute] <"
+                                     (rtos *CadSetup-HatchRotDelta* 2 1)
+                                     ">: ")))
+
+          (cond
+            ((= inp "Absolute")
+             (setq absAngle (getreal (strcat "\nEnter absolute hatch rotation angle in degrees <"
+                                             (rtos *CadSetup-HatchRotAbs* 2 1)
+                                             ">: ")))
+             (if (null absAngle) (setq absAngle *CadSetup-HatchRotAbs*))
+             (setq *CadSetup-HatchRotAbs* absAngle
+                   isAbsolute T))
+            ((numberp inp)
+             (setq deltaAngle inp
+                   *CadSetup-HatchRotDelta* inp
+                   isAbsolute nil))
+            (t
+             (setq deltaAngle *CadSetup-HatchRotDelta*
+                   isAbsolute nil))
+          )
+
+          ;; 5. Begin Atomic Undo Transaction
+          (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
+
+          (setq scaledCount 0
+                solidCount  0
+                lockedCount 0
+                i           0)
+
+          ;; 6. Process Entities
+          (while (< i totalCount)
+            (setq ent (ssname ss i)
+                  i   (1+ i))
+            (if (= (cdr (assoc 0 (entget ent))) "HATCH")
+              (progn
+                (setq obj (vl-catch-all-apply 'vlax-ename->vla-object (list ent)))
+                (if (and obj (not (vl-catch-all-error-p obj)))
+                  (progn
+                    (setq patName (strcase (vl-catch-all-apply 'vla-get-PatternName (list obj))))
+                    (if (vl-catch-all-error-p patName) (setq patName ""))
+
+                    ;; Detect solid fills or gradient objects (which do not support pattern rotation)
+                    (if (or (= patName "SOLID")
+                            (and (vlax-property-available-p obj 'HatchObjectType)
+                                 (= (vla-get-HatchObjectType obj) 1)))
+                      (setq solidCount (1+ solidCount))
+                      (progn
+                        (setq curAngleRad (vl-catch-all-apply 'vla-get-PatternAngle (list obj)))
+                        (if (and (not (vl-catch-all-error-p curAngleRad)) (numberp curAngleRad))
+                          (progn
+                            (if isAbsolute
+                              (setq newAngleDeg absAngle)
+                              (progn
+                                (setq curAngleDeg (* curAngleRad (/ 180.0 pi)))
+                                (setq newAngleDeg (+ curAngleDeg deltaAngle))
+                              )
+                            )
+                            ;; Convert to radians
+                            (setq newAngleRad (* newAngleDeg (/ pi 180.0)))
+                            (setq err (vl-catch-all-apply 'vla-put-PatternAngle (list obj newAngleRad)))
+                            (if (vl-catch-all-error-p err)
+                              (setq lockedCount (1+ lockedCount))
+                              (progn
+                                (vl-catch-all-apply 'vla-Evaluate (list obj))
+                                (setq scaledCount (1+ scaledCount))
+                              )
+                            )
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+
+          ;; 7. Close Atomic Undo Transaction
+          (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+
+          ;; 8. User Feedback Summary
+          (if isAbsolute
+            (princ (strcat "\n[HROT] Set rotation to " (rtos absAngle 2 1) "° for " (itoa scaledCount) " hatch(es)."))
+            (princ (strcat "\n[HROT] Rotated " (itoa scaledCount) " hatch(es) by "
+                           (if (>= deltaAngle 0) "+" "") (rtos deltaAngle 2 1) "°."))
+          )
+          (if (> solidCount 0)
+            (princ (strcat " (" (itoa solidCount) " solid/gradient fill(s) skipped)"))
+          )
+          (if (> lockedCount 0)
+            (princ (strcat " (" (itoa lockedCount) " hatch(es) on locked layers skipped)"))
+          )
+        )
+      )
+    )
+  )
+
+  (setvar "CMDECHO" oldCmd)
+  (princ)
+)
+
+;; Command aliases
+(defun c:HROTATE () (c:HROT))
+(defun c:HR      () (c:HROT))
 
 
 ;;; --------------------------------------------------------------------------

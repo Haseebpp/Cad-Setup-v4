@@ -9,19 +9,80 @@
 ;; BOUNDING BOX CALCULATIONS
 ;; ===========================================================================
 
-;; CadSetup:GetBoundingBox - Gets WCS bounding box for a single VLA-Object
-;; Returns ((minX minY minZ) (maxX maxY maxZ)) or nil
-(defun CadSetup:GetBoundingBox (obj / minPt maxPt res)
-  (if (and obj (= (type obj) 'VLA-OBJECT))
+;; CadSetup:GetBoundingBoxDxf - Extracts tight WCS bounding box via DXF group codes
+;; Fallback for environments where ActiveX COM automation server is unreachable
+(defun CadSetup:GetBoundingBoxDxf (ent / d eType pts p10 p11 r)
+  (if (and ent (= (type ent) 'ENAME))
     (progn
-      (setq res (vl-catch-all-apply 'vla-getboundingbox (list obj 'minPt 'maxPt)))
-      (if (not (vl-catch-all-error-p res))
-        (list (vlax-safearray->list minPt)
-              (vlax-safearray->list maxPt))
-        nil
+      (setq d (entget ent)
+            eType (cdr (assoc 0 d)))
+      (cond
+        ((= eType "LINE")
+         (setq p10 (cdr (assoc 10 d))
+               p11 (cdr (assoc 11 d)))
+         (list (list (min (car p10) (car p11)) (min (cadr p10) (cadr p11)) (min (caddr p10) (caddr p11)))
+               (list (max (car p10) (car p11)) (max (cadr p10) (cadr p11)) (max (caddr p10) (caddr p11))))
+        )
+        ((= eType "LWPOLYLINE")
+         (setq pts (mapcar 'cdr (vl-remove-if-not '(lambda (x) (= (car x) 10)) d)))
+         (if pts
+           (list (list (apply 'min (mapcar 'car pts)) (apply 'min (mapcar 'cadr pts)) 0.0)
+                 (list (apply 'max (mapcar 'car pts)) (apply 'max (mapcar 'cadr pts)) 0.0))
+         )
+        )
+        ((= eType "CIRCLE")
+         (setq p10 (cdr (assoc 10 d))
+               r   (cdr (assoc 40 d)))
+         (list (list (- (car p10) r) (- (cadr p10) r) (caddr p10))
+               (list (+ (car p10) r) (+ (cadr p10) r) (caddr p10)))
+        )
+        ((= eType "ARC")
+         (setq p10 (cdr (assoc 10 d))
+               r   (cdr (assoc 40 d)))
+         (list (list (- (car p10) r) (- (cadr p10) r) (caddr p10))
+               (list (+ (car p10) r) (+ (cadr p10) r) (caddr p10)))
+        )
+        ((or (= eType "POINT") (= eType "INSERT") (= eType "TEXT") (= eType "MTEXT"))
+         (if (setq p10 (cdr (assoc 10 d)))
+           (list p10 p10)
+           nil
+         )
+        )
+        (t
+         (if (setq p10 (cdr (assoc 10 d)))
+           (list p10 p10)
+           nil
+         )
+        )
       )
     )
     nil
+  )
+)
+
+;; CadSetup:GetBoundingBox - Gets WCS bounding box for a VLA-Object or ENAME
+;; Returns ((minX minY minZ) (maxX maxY maxZ)) or nil
+(defun CadSetup:GetBoundingBox (obj / minPt maxPt res)
+  (cond
+    ((and obj (= (type obj) 'VLA-OBJECT))
+     (setq res (vl-catch-all-apply 'vla-getboundingbox (list obj 'minPt 'maxPt)))
+     (if (not (vl-catch-all-error-p res))
+       (list (vlax-safearray->list minPt)
+             (vlax-safearray->list maxPt))
+       (if (vlax-vla-object->ename obj)
+         (CadSetup:GetBoundingBoxDxf (vlax-vla-object->ename obj))
+         nil
+       )
+     )
+    )
+    ((and obj (= (type obj) 'ENAME))
+     (setq res (vl-catch-all-apply 'vlax-ename->vla-object (list obj)))
+     (if (and (not (vl-catch-all-error-p res)) res)
+       (CadSetup:GetBoundingBox res)
+       (CadSetup:GetBoundingBoxDxf obj)
+     )
+    )
+    (t nil)
   )
 )
 
@@ -35,8 +96,10 @@
       (setq i 0)
       (while (< i (sslength ss))
         (setq ent (ssname ss i)
-              obj (vlax-ename->vla-object ent))
-        (setq bbox (CadSetup:GetBoundingBox obj))
+              obj (vl-catch-all-apply 'vlax-ename->vla-object (list ent)))
+        (setq bbox (if (and (not (vl-catch-all-error-p obj)) obj)
+                     (CadSetup:GetBoundingBox obj)
+                     (CadSetup:GetBoundingBox ent)))
         (if bbox
           (progn
             (setq pMinW (car bbox)

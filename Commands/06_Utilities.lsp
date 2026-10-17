@@ -85,13 +85,16 @@
 ;;; 3. OBJECT PROPERTIES & GEOMETRY MODIFIERS
 ;;; --------------------------------------------------------------------------
 
-;; CTRANS : Set Object Transparency (0 to 90)
-(defun c:CTRANS (/ *error* oldCmd ss val)
+;; CTRANS : Set Object Transparency (0 to 90, ByLayer, ByBlock)
+;; Recursively applies transparency across nested blocks and sub-entities
+(defun c:CTRANS (/ *error* oldCmd ss val acadApp doc blocks
+                   processedBlocks blkDefCount nestedCount i ent obj
+                   _SetObjTransparency _ProcessBlockDef)
   (setq oldCmd (getvar "CMDECHO"))
 
   (defun *error* (msg)
     (if oldCmd (setvar "CMDECHO" oldCmd))
-    (CadSetup:UndoReset)
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
     (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
       (princ (strcat "\n[CTRANS] Error: " msg))
     )
@@ -99,19 +102,231 @@
   )
 
   (setvar "CMDECHO" 0)
-  (princ "\nSelect objects to change transparency: ")
-  (if (setq ss (ssget))
+
+  ;; 1. Support implied pre-selection (Pickfirst) or prompt for selection
+  (setq ss (ssget "_I"))
+  (if (not ss)
     (progn
-      (initget 4)
-      (setq val (getint "\nEnter transparency value (0 to 90): "))
-      (if (and val (<= val 90))
+      (princ "\nSelect objects to change transparency: ")
+      (setq ss (ssget))
+    )
+  )
+
+  (if (and ss (> (sslength ss) 0))
+    (progn
+      ;; 2. Prompt for Transparency Value (0 to 90, ByLayer, ByBlock with session default)
+      (if (not (and (boundp '*CadSetup-LastTransparency*)
+                    (or (and (numberp *CadSetup-LastTransparency*)
+                             (>= *CadSetup-LastTransparency* 0)
+                             (<= *CadSetup-LastTransparency* 90))
+                        (member (strcase (vl-princ-to-string *CadSetup-LastTransparency*))
+                                '("BYLAYER" "BYBLOCK")))))
+        (setq *CadSetup-LastTransparency* 50)
+      )
+
+      (initget 4 "ByLayer ByBlock")
+      (setq val (getint (strcat "\nEnter transparency value (0 to 90), [ByLayer/ByBlock] <"
+                                (if (numberp *CadSetup-LastTransparency*)
+                                  (itoa *CadSetup-LastTransparency*)
+                                  (vl-princ-to-string *CadSetup-LastTransparency*))
+                                ">: ")))
+
+      (cond
+        ((null val)
+         (setq val *CadSetup-LastTransparency*))
+        ((numberp val)
+         (setq *CadSetup-LastTransparency* val))
+        ((= (type val) 'STR)
+         (setq *CadSetup-LastTransparency* val))
+      )
+
+      (if (or (and (numberp val) (>= val 0) (<= val 90))
+              (and (= (type val) 'STR) (member (strcase val) '("BYLAYER" "BYBLOCK"))))
         (progn
-          (CadSetup:UndoStart)
-          (command "_.CHPROP" ss "" "_Transparency" val "")
-          (CadSetup:UndoEnd)
-          (princ (strcat "\n[CTRANS] Transparency set to " (itoa val) " for " (itoa (sslength ss)) " object(s)."))
+          (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
+
+          (setq acadApp         (if (boundp 'CadSetup:GetAcad) (CadSetup:GetAcad) (vlax-get-acad-object))
+                doc             (if (boundp 'CadSetup:GetDoc)  (CadSetup:GetDoc)  (if acadApp (vla-get-activedocument acadApp)))
+                blocks          (if doc (vla-get-blocks doc) nil)
+                processedBlocks nil
+                blkDefCount     0
+                nestedCount     0
+                i               0)
+
+          ;; Local helper: Safely set transparency on any VLA object / ENAME
+          (defun _SetObjTransparency (o tVal / strVal res ename ed alpha dxf440)
+            (cond
+              ((boundp 'CadSetup:SetEntityTransparency)
+               (CadSetup:SetEntityTransparency o tVal))
+              (t
+               (if (and o (not (vl-catch-all-error-p o)))
+                 (progn
+                   (if (= (type o) 'ENAME)
+                     (setq o (vl-catch-all-apply 'vlax-ename->vla-object (list o)))
+                   )
+                   (if (and o (not (vl-catch-all-error-p o)) (= (type o) 'VLA-OBJECT))
+                     (progn
+                       (setq strVal (cond
+                                      ((numberp tVal) (itoa (fix tVal)))
+                                      ((= (type tVal) 'STR) tVal)
+                                      (t "0")))
+                       ;; Method 1: ActiveX EntityTransparency property
+                       (setq res (vl-catch-all-apply 'vlax-put-property (list o 'EntityTransparency strVal)))
+                       (if (vl-catch-all-error-p res)
+                         (setq res (vl-catch-all-apply 'vlax-put-property (list o 'Transparency strVal)))
+                       )
+                       ;; Method 2: DXF Group 440 via entmod
+                       (if (vl-catch-all-error-p res)
+                         (progn
+                           (setq ename (vl-catch-all-apply 'vlax-vla-object->ename (list o)))
+                           (if (and ename (not (vl-catch-all-error-p ename)) (= (type ename) 'ENAME) (setq ed (entget ename)))
+                             (progn
+                               (cond
+                                 ((numberp tVal)
+                                  (setq alpha (fix (+ 0.5 (* 255.0 (/ (- 100 (max 0 (min 90 tVal))) 100.0)))))
+                                  (setq dxf440 (+ 33554432 alpha)))
+                                 ((= (strcase strVal) "BYBLOCK")
+                                  (setq dxf440 16777216))
+                                 (t ; ByLayer
+                                  (setq dxf440 0))
+                               )
+                               (if (assoc 440 ed)
+                                 (entmod (subst (cons 440 dxf440) (assoc 440 ed) ed))
+                                 (entmod (append ed (list (cons 440 dxf440))))
+                               )
+                             )
+                           )
+                         )
+                       )
+                       T
+                     )
+                     nil
+                   )
+                 )
+                 nil
+               )
+              )
+            )
+          )
+
+          ;; Local recursive helper: Traverse and apply transparency across block definitions
+          (defun _ProcessBlockDef (bName / blkDef subObj subName effName atts)
+            (if (and bName
+                     (= (type bName) 'STR)
+                     (> (strlen bName) 0)
+                     blocks
+                     (not (member (strcase bName) processedBlocks)))
+              (progn
+                (setq processedBlocks (cons (strcase bName) processedBlocks))
+                (setq blkDef (vl-catch-all-apply 'vla-item (list blocks bName)))
+                (if (and (not (vl-catch-all-error-p blkDef))
+                         blkDef
+                         (= (type blkDef) 'VLA-OBJECT)
+                         (not (and (vlax-property-available-p blkDef 'IsLayout)
+                                   (= (vlax-get-property blkDef 'IsLayout) :vlax-true)))
+                         (not (and (vlax-property-available-p blkDef 'IsXref)
+                                   (= (vlax-get-property blkDef 'IsXref) :vlax-true))))
+                  (progn
+                    (setq blkDefCount (1+ blkDefCount))
+                    (vlax-for subObj blkDef
+                      ;; Apply transparency to every entity inside the block definition
+                      (_SetObjTransparency subObj val)
+                      (setq subName (vla-get-objectname subObj))
+                      ;; If the sub-entity is a nested block reference, process it and recurse!
+                      (if (= subName "AcDbBlockReference")
+                        (progn
+                          (setq nestedCount (1+ nestedCount))
+                          ;; Apply transparency to attributes if any
+                          (if (and (vlax-property-available-p subObj 'HasAttributes)
+                                   (= (vla-get-hasattributes subObj) :vlax-true))
+                            (progn
+                              (setq atts (vl-catch-all-apply 'vlax-invoke (list subObj 'getattributes)))
+                              (if (and (not (vl-catch-all-error-p atts)) (listp atts))
+                                (foreach att atts (_SetObjTransparency att val))
+                              )
+                            )
+                          )
+                          ;; Recurse into nested block definition
+                          (if (vlax-property-available-p subObj 'effectivename)
+                            (setq effName (vla-get-effectivename subObj))
+                            (setq effName (vla-get-name subObj))
+                          )
+                          (if effName (_ProcessBlockDef effName))
+                          (_ProcessBlockDef (vla-get-name subObj))
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+
+          ;; 3. Process Selected Top-Level Objects & Nested Blocks
+          (while (< i (sslength ss))
+            (setq ent (ssname ss i))
+            (setq obj (vl-catch-all-apply 'vlax-ename->vla-object (list ent)))
+            (if (and (not (vl-catch-all-error-p obj)) (= (type obj) 'VLA-OBJECT))
+              (progn
+                ;; Apply transparency to the top-level entity
+                (_SetObjTransparency obj val)
+                ;; If it's a block reference, update its attributes & nested block definitions
+                (if (= (vla-get-objectname obj) "AcDbBlockReference")
+                  (progn
+                    (if (and (vlax-property-available-p obj 'HasAttributes)
+                             (= (vla-get-hasattributes obj) :vlax-true))
+                      (progn
+                        (setq atts (vl-catch-all-apply 'vlax-invoke (list obj 'getattributes)))
+                        (if (and (not (vl-catch-all-error-p atts)) (listp atts))
+                          (foreach att atts (_SetObjTransparency att val))
+                        )
+                      )
+                    )
+                    (if (vlax-property-available-p obj 'effectivename)
+                      (_ProcessBlockDef (vla-get-effectivename obj))
+                    )
+                    (_ProcessBlockDef (vla-get-name obj))
+                  )
+                )
+              )
+            )
+            (setq i (1+ i))
+          )
+
+          ;; 4. Regenerate viewports if any block definitions were modified
+          (if (and doc (> blkDefCount 0))
+            (vl-catch-all-apply 'vla-regen (list doc (if (boundp 'acAllViewports) acAllViewports 1)))
+          )
+
+          ;; 5. Ensure AutoCAD displays transparency on-screen
+          (if (= (getvar "TRANSPARENCYDISPLAY") 0)
+            (progn
+              (setvar "TRANSPARENCYDISPLAY" 1)
+              (princ "\n[CTRANS] Enabled TRANSPARENCYDISPLAY (1) for on-screen transparency.")
+            )
+          )
+
+          ;; 6. Retain selection for immediate follow-up editing
+          (sssetfirst nil ss)
+
+          (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+
+          (princ (strcat "\n[CTRANS] Transparency set to "
+                         (if (numberp val) (strcat (itoa val) "%") val)
+                         " for "
+                         (itoa (sslength ss))
+                         " object(s)"
+                         (if (> blkDefCount 0)
+                           (strcat " (" (itoa blkDefCount) " block definition(s)"
+                                   (if (> nestedCount 0)
+                                     (strcat ", " (itoa nestedCount) " nested block(s)")
+                                     ""
+                                   )
+                                   " updated)")
+                           "")
+                         "."))
         )
-        (princ "\n[CTRANS] Invalid transparency value. Must be between 0 and 90.")
+        (princ "\n[CTRANS] Invalid transparency value. Must be between 0 and 90, ByLayer, or ByBlock.")
       )
     )
     (princ "\n[CTRANS] No objects selected.")
@@ -591,6 +806,7 @@
   )
   (setq lastEnt (entlast))
   (CadSetup:UndoStart)
+  (initcommandversion)
   (command "_.rectang")
   (while (> (getvar 'cmdactive) 0)
     (command pause)

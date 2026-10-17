@@ -62,7 +62,7 @@ sequenceDiagram
     Auto->>Auto: CadSetup:Initialize Routine
     Auto->>Help: Load Standard Linetypes (acadiso.lin)
     Auto->>Db: Read *CadSetup-Layers-Data*
-    Auto->>Help: EnsureLayer for each of 36 Production Layers
+    Auto->>Help: EnsureLayer for each of 37 Production Layers
     Auto->>ACAD: Setup Typography (ARCH-TEXT) & Dimstyles (ARCH-TICK)
     Auto->>ACAD: Set Defaults (CLAYER=R-LINE-VISB, DIMLAYER=R-ANNO-DIMS, HPLAYER=R-HTCH-GENR)
     Auto-->>ACAD: Initialization Complete [OK]
@@ -82,7 +82,7 @@ d:\HASEEB\Cad-Setup-v4\
 │   └── 01_Undo-Manager.lsp     ; Re-entrant Undo-mark wrappers (UndoStart / UndoEnd / UndoReset)
 ├── Database/
 │   ├── Db_Blocks.lsp           ; Master standard joinery block dictionary & procedural geometry data
-│   ├── Db_Layers.lsp           ; Master layer dictionary & properties (36 production layers)
+│   ├── Db_Layers.lsp           ; Master layer dictionary & properties (37 production layers)
 │   ├── Db_SysVars.lsp          ; Recommended system variables & drawing states
 │   └── Db_Presets.lsp          ; Workspace presets (11 industry drafting profiles)
 ├── Helpers/

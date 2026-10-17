@@ -527,31 +527,67 @@
   )
 )
 
-;; CadSetup:SetEntityTransparency - Applies object transparency (0 to 90) safely
-(defun CadSetup:SetEntityTransparency (entObj trans / tVal ename res)
-  (if (and entObj (numberp trans) (>= trans 0) (<= trans 90))
+;; CadSetup:SetEntityTransparency - Applies object transparency (0 to 90, ByLayer, ByBlock) safely
+(defun CadSetup:SetEntityTransparency (entObj trans / tVal strVal ename res ed alpha dxf440)
+  (if (and entObj
+           (or (and (numberp trans) (>= trans 0) (<= trans 90))
+               (and (= (type trans) 'STR) (member (strcase trans) '("BYLAYER" "BYBLOCK")))))
     (progn
-      (setq tVal (fix trans))
-      ;; Method 1: ActiveX property (AutoCAD 2011+)
-      (setq res (vl-catch-all-apply 'vlax-put-property (list entObj 'EntityTransparency (itoa tVal))))
-      (if (vl-catch-all-error-p res)
-        ;; Fallback: CHPROP command
+      (setq strVal (if (numberp trans) (itoa (fix trans)) trans))
+      (if (= (type entObj) 'ENAME)
+        (setq entObj (vl-catch-all-apply 'vlax-ename->vla-object (list entObj)))
+      )
+      (if (and entObj (not (vl-catch-all-error-p entObj)) (= (type entObj) 'VLA-OBJECT))
         (progn
-          (setq ename (cond
-                        ((= (type entObj) 'VLA-OBJECT) (vlax-vla-object->ename entObj))
-                        ((= (type entObj) 'ENAME) entObj)
-                        (t nil)))
-          (if ename
-            (vl-catch-all-apply
-              (function (lambda ()
-                (setvar "CMDECHO" 0)
-                (command "_.CHPROP" ename "" "_Transparency" tVal "")
-              ))
+          ;; Method 1: ActiveX property (AutoCAD 2011+)
+          (setq res (vl-catch-all-apply 'vlax-put-property (list entObj 'EntityTransparency strVal)))
+          (if (vl-catch-all-error-p res)
+            (setq res (vl-catch-all-apply 'vlax-put-property (list entObj 'Transparency strVal)))
+          )
+          ;; Method 2: DXF Group 440 via entmod (safe inside block definitions)
+          (if (vl-catch-all-error-p res)
+            (progn
+              (setq ename (vl-catch-all-apply 'vlax-vla-object->ename (list entObj)))
+              (if (and ename (not (vl-catch-all-error-p ename)) (= (type ename) 'ENAME) (setq ed (entget ename)))
+                (progn
+                  (cond
+                    ((numberp trans)
+                     (setq alpha (fix (+ 0.5 (* 255.0 (/ (- 100 (max 0 (min 90 trans))) 100.0)))))
+                     (setq dxf440 (+ 33554432 alpha)))
+                    ((= (strcase strVal) "BYBLOCK")
+                     (setq dxf440 16777216))
+                    (t ; ByLayer
+                     (setq dxf440 0))
+                  )
+                  (if (assoc 440 ed)
+                    (setq res (entmod (subst (cons 440 dxf440) (assoc 440 ed) ed)))
+                    (setq res (entmod (append ed (list (cons 440 dxf440)))))
+                  )
+                )
+              )
             )
           )
+          ;; Method 3: Fallback CHPROP command for selectable entities in drawing space
+          (if (vl-catch-all-error-p res)
+            (progn
+              (setq ename (cond
+                            ((= (type entObj) 'VLA-OBJECT) (vlax-vla-object->ename entObj))
+                            ((= (type entObj) 'ENAME) entObj)
+                            (t nil)))
+              (if ename
+                (vl-catch-all-apply
+                  (function (lambda ()
+                    (setvar "CMDECHO" 0)
+                    (command "_.CHPROP" ename "" "_Transparency" (if (numberp trans) (fix trans) (strcat "_" trans)) "")
+                  ))
+                )
+              )
+            )
+          )
+          T
         )
+        nil
       )
-      T
     )
     nil
   )

@@ -335,6 +335,7 @@
           ;; Draw clipping rectangle directly on the target layer
           (setvar 'cmdecho 1)
           (setq preRect (entlast))
+          (initcommandversion)
           (command "_.rectang")
           (while (> (getvar 'cmdactive) 0) (command pause))
           (setvar 'cmdecho 0)

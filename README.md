@@ -6,7 +6,7 @@
 [![AutoCAD](https://img.shields.io/badge/AutoCAD-2020%20--%202026-blue.svg)](#requirements)
 [![Language](https://img.shields.io/badge/Language-AutoLISP%20%7C%20Visual%20LISP%20%7C%20DCL-brightgreen.svg)](#architecture)
 [![Architecture](https://img.shields.io/badge/Architecture-5--Layer%20Horizontal-orange.svg)](ARCHITECTURE.md)
-[![Standard](https://img.shields.io/badge/Standards-36%20Production%20Layers%20(ISO%2013567%20Adapted)-purple.svg)](#layer-standards)
+[![Standard](https://img.shields.io/badge/Standards-37%20Production%20Layers%20(ISO%2013567%20Adapted)-purple.svg)](#layer-standards)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](#license)
 
 ---
@@ -42,7 +42,7 @@
 
 * **Core**: Strict re-entrant undo transactions and error safety wrappers.
 * **Helpers**: Modular COM/ActiveX wrappers, UCS geometry calculation, and selection utilities.
-* **Database**: Pure data repositories defining 36 production layers, system variables, block components, and 11 industry drafting presets.
+* **Database**: Pure data repositories defining 37 production layers, system variables, block components, and 11 industry drafting presets.
 * **Commands**: Ergonomic, single-key and atomic command implementations.
 * **UI**: Clean, static DCL dialogs paired with event controllers and real-time vector previews.
 
@@ -75,7 +75,7 @@
    * Run `OPTIONS` -> **Files** tab -> **Trusted Locations** -> **Add...** -> browse to your `Cad-Setup-v4` directory.
 6. Restart AutoCAD or type `(load "D:/HASEEB/Cad-Setup-v4/Autorun.lsp")`.
 
-Upon startup, the system automatically initializes all 36 production layers, linetypes (`acadiso.lin`), typography styles (`ARCH-TEXT`, `ARCH-TITLE`), and dimension styles (`ARCH-TICK`, `ARCH-ARROW`).
+Upon startup, the system automatically initializes all 37 production layers, linetypes (`acadiso.lin`), typography styles (`ARCH-TEXT`, `ARCH-TITLE`), and dimension styles (`ARCH-TICK`, `ARCH-ARROW`).
 
 ---
 
@@ -216,7 +216,7 @@ Located in [Core/01_Undo-Manager.lsp](file:///d:/HASEEB/Cad-Setup-v4/Core/01_Und
 ### Layer & Standards Management
 | Command | Alias | Description |
 |:---:|:---:|:---|
-| `LOAD-LAYERS` | `RL`, `RELOAD-LAYERS` | Synchronizes 36 standardized production layers from database |
+| `LOAD-LAYERS` | `RL`, `RELOAD-LAYERS` | Synchronizes 37 standardized production layers from database |
 | `LOAD-DEFAULT-CURRENT-LAYERS` | `DCL` | Safely applies default drawing, dim, and hatch layers |
 | `L0` | `L0` | Instantly resets current layer to standard `"0"` |
 | `TOGGLE-HELP-LINE` | `/`, `THL` | Instantly toggles visibility (ON/OFF) of `01-HELP-LINE` |
@@ -278,7 +278,7 @@ Cad-Setup-v4/
 │   ├── Help_Layers.lsp         # EnsureLayerFromDb, EnsureLayer, Safe layer setter
 │   └── Help_Selection.lsp      # Selection filters, entity predicates
 ├── Database/
-│   ├── Db_Layers.lsp           # Master 36-layer dictionary & specifications
+│   ├── Db_Layers.lsp           # Master 37-layer dictionary & specifications
 │   ├── Db_SysVars.lsp          # Recommended drawing states & system variables
 │   ├── Db_Presets.lsp          # 11 industry drafting workspace profiles
 │   └── Db_Blocks.lsp           # Joinery block definitions & procedural geometry

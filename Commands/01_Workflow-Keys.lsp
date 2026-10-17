@@ -743,6 +743,7 @@
   (setq lastEnt (entlast))
 
   (setvar "CMDECHO" 1)
+  (initcommandversion)
   (command "._rectang")
   (while (> (getvar "CMDACTIVE") 0)
     (command pause)
@@ -2038,6 +2039,7 @@
         *WF-LAYER-RL* layName)
   (princ (strcat "\n[PL] Current layer set to: " layName))
   (setvar "CMDECHO" 1)
+  (initcommandversion)
   (command "_.PLINE")
   (while (> (getvar "CMDACTIVE") 0)
     (command pause)
@@ -2047,8 +2049,8 @@
   (princ)
 )
 
-;; CadSetup:DrawContinuousRectangles - Continuously draws rectangles on specified layer with Smart Auto-Hatch
-(defun CadSetup:DrawContinuousRectangles (layName / *error* oldEcho pt1 dbRow hPat hScl hRot hTrans hTargetLay rectEnt rectObj hObj)
+;; CadSetup:DrawRectangle - Draws rectangle on specified layer using latest default Rectangle command with Dynamic Input and Smart Auto-Hatch
+(defun CadSetup:DrawRectangle (layName / *error* oldEcho lastEnt rectEnt rectObj dbRow hPat hScl hRot hTrans hTargetLay hObj)
   (defun *error* (msg)
     (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
     (if oldEcho (setvar "CMDECHO" oldEcho))
@@ -2090,47 +2092,58 @@
     (princ (strcat "\n[REC Smart Auto-Hatch: ON] Pattern: " hPat " | Scale: " (rtos hScl 2 2) " | Rot: " (rtos hRot 2 1) " deg | Target: " hTargetLay))
     (princ "\n[REC Smart Auto-Hatch: OFF or Pattern is NONE]")
   )
-  (princ "\n[REC] Continuous Rectangle Mode: Pick two corners per rectangle (Press Enter or Esc when finished)...")
 
-  (while (setq pt1 (getpoint "\nSpecify first corner point or [Enter to finish]: "))
-    (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
-    (setvar "CMDECHO" 1)
-    (command "._rectang" pt1 pause)
-    (setvar "CMDECHO" 0)
+  (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
+  (setq lastEnt (entlast))
+  (setvar "CMDECHO" 1)
+  (initcommandversion)
+  (command "_.RECTANG")
+  (while (> (getvar "CMDACTIVE") 0)
+    (command pause)
+  )
+  (setvar "CMDECHO" 0)
 
-    (if (and *CadSetup-AutoHatch-Enabled*
-             hPat
-             (/= (strcase hPat) "NONE")
-             (/= hPat ""))
-      (progn
-        (setq rectEnt (entlast))
-        (if (and rectEnt (setq rectObj (vlax-ename->vla-object rectEnt)))
-          (progn
-            ;; Generate associative hatch on dedicated hatch layer
-            (setq hObj (CadSetup:CreateHatch rectObj hPat hScl hRot nil hTargetLay))
-            (if hObj
-              (progn
-                ;; Apply material transparency if specified (> 0)
-                (if (and (numberp hTrans) (> hTrans 0))
-                  (CadSetup:SetEntityTransparency hObj hTrans)
+  (setq rectEnt (entlast))
+  (if (and rectEnt (not (eq rectEnt lastEnt)))
+    (progn
+      (if (and *CadSetup-AutoHatch-Enabled*
+               hPat
+               (/= (strcase hPat) "NONE")
+               (/= hPat ""))
+        (progn
+          (setq rectObj (vlax-ename->vla-object rectEnt))
+          (if rectObj
+            (progn
+              ;; Generate associative hatch on dedicated hatch layer
+              (setq hObj (CadSetup:CreateHatch rectObj hPat hScl hRot nil hTargetLay))
+              (if hObj
+                (progn
+                  ;; Apply material transparency if specified (> 0)
+                  (if (and (numberp hTrans) (> hTrans 0))
+                    (CadSetup:SetEntityTransparency hObj hTrans)
+                  )
+                  (princ (strcat "\n[Auto-Hatch] Filled boundary with " hPat " (Scale " (rtos hScl 2 2) ") on " hTargetLay "."))
                 )
-                (princ (strcat "\n[Auto-Hatch] Filled boundary with " hPat " (Scale " (rtos hScl 2 2) ") on " hTargetLay "."))
+                (princ (strcat "\n[Auto-Hatch Warning] Failed to generate hatch pattern '" hPat "'."))
               )
-              (princ (strcat "\n[Auto-Hatch Warning] Failed to generate hatch pattern '" hPat "'."))
             )
           )
         )
-      )
-      (if (and *CadSetup-AutoHatch-Enabled* (or (null hPat) (= (strcase hPat) "NONE") (= hPat "")))
-        (princ "\n[REC] Rectangle created. (Hatch skipped: Pattern set to NONE).")
+        (if (and *CadSetup-AutoHatch-Enabled* (or (null hPat) (= (strcase hPat) "NONE") (= hPat "")))
+          (princ "\n[REC] Rectangle created. (Hatch skipped: Pattern set to NONE).")
+        )
       )
     )
-    (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
   )
-
+  (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
   (setvar "CMDECHO" oldEcho)
-  (princ (strcat "\n[REC] Finished drawing rectangles. Active layer remains: " layName))
+  (princ (strcat "\n[REC] Active layer remains: " layName))
   (princ)
+)
+
+;; CadSetup:DrawContinuousRectangles - Backward compatibility alias to CadSetup:DrawRectangle
+(defun CadSetup:DrawContinuousRectangles (layName)
+  (CadSetup:DrawRectangle layName)
 )
 
 ;; CadSetup:DrawRLayerPolyline & CadSetup:DrawRLayerRectangles - Compatibility aliases
@@ -2139,7 +2152,7 @@
 )
 
 (defun CadSetup:DrawRLayerRectangles (layName)
-  (CadSetup:DrawContinuousRectangles layName)
+  (CadSetup:DrawRectangle layName)
 )
 
 ;; =============================================================================
@@ -2618,7 +2631,7 @@
          (list :draw-pl selLayer)
         )
         ((= act 2)
-         (CadSetup:DrawContinuousRectangles selLayer)
+         (CadSetup:DrawRectangle selLayer)
          (list :draw-rec selLayer)
         )
         ((= act 3)
@@ -2861,7 +2874,7 @@
             (progn
               (setq chosenLayer (cdr (assoc (strcase (vl-string-translate " " "_" opt)) kwMap)))
               (if chosenLayer
-                (CadSetup:DrawContinuousRectangles chosenLayer)
+                (CadSetup:DrawRectangle chosenLayer)
                 (princ (strcat "\n[ML] Unrecognized material: " opt))
               )
             )
@@ -3201,40 +3214,12 @@
 
 ;; CadSetup:DrawRLayerPolyline - Sets current layer, records state, and launches Polyline
 (defun CadSetup:DrawRLayerPolyline (layName)
-  (CadSetup:SetCurrentLayerSafe layName)
-  (setq *WF-LAYER-RL* layName)
-  (princ (strcat "\n[-] Current layer set to: " layName))
-  (setvar "CMDECHO" 1)
-  (command "_.PLINE")
-  (princ)
+  (CadSetup:DrawPolyline layName)
 )
 
-;; CadSetup:DrawRLayerRectangles - Sets current layer, records state, and runs Continuous Rectangles
-(defun CadSetup:DrawRLayerRectangles (layName / *error* oldEcho pt1)
-  (defun *error* (msg)
-    (if oldEcho (setvar "CMDECHO" oldEcho))
-    (if (and msg (not (wcmatch (strcase msg t) "*break*,*cancel*,*exit*")))
-      (princ (strcat "\n[-] Error: " msg))
-    )
-    (princ)
-  )
-
-  (setq oldEcho (getvar "CMDECHO"))
-  (setvar "CMDECHO" 0)
-  (CadSetup:SetCurrentLayerSafe layName)
-  (setq *WF-LAYER-RL* layName)
-  (princ (strcat "\n[-] Current layer set to: " layName))
-  (princ "\n[-] Continuous Rectangle Mode: Pick two corners per rectangle (Press Enter or Esc when finished)...")
-
-  (while (setq pt1 (getpoint "\nSpecify first corner point or [Enter to finish]: "))
-    (setvar "CMDECHO" 1)
-    (command "._rectang" pt1 pause)
-    (setvar "CMDECHO" 0)
-  )
-
-  (setvar "CMDECHO" oldEcho)
-  (princ (strcat "\n[-] Finished drawing rectangles. Active layer remains: " layName))
-  (princ)
+;; CadSetup:DrawRLayerRectangles - Sets current layer, records state, and launches Rectangle
+(defun CadSetup:DrawRLayerRectangles (layName)
+  (CadSetup:DrawRectangle layName)
 )
 
 ;; CadSetup:RLayerSelectorDialog - Modal DCL controller for selecting and editing R-* layer properties
@@ -3640,7 +3625,7 @@
                    (CadSetup:SetCurrentLayerSafe chosenLayer)
                    (setq *WF-LAYER-RL* chosenLayer)
                    (if (equal (strcase (if *WF-TOOL-RL* *WF-TOOL-RL* "Polyline")) "RECTANGLE")
-                     (CadSetup:DrawContinuousRectangles chosenLayer)
+                     (CadSetup:DrawRectangle chosenLayer)
                      (CadSetup:DrawPolyline chosenLayer)
                    )
                  )

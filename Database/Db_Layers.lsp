@@ -58,6 +58,7 @@
   ("R-MAT-STONE-MARBLE" 152 "115,130,145" "CONTINUOUS"  25  T    "MARBLE2"   1.0  0.0  0   nil  "Color 152 (Cool Slate Gray): Marble - Veined marble, natural calacatta/carrara, polished stone")
   ("R-MAT-STONE-QUARTZ" 162 "95,120,135"  "CONTINUOUS"  25  T    "NET"       4.0  0.0  0   nil  "Color 162 (Medium Slate): Quartz - Engineered composite stone, quartz slabs, solid surfaces")
   ("R-MAT-STONE-SOLID"  150 "80,95,110"   "CONTINUOUS"  25  T    "AR-CONC"   1.0  0.0  0   nil  "Color 150 (Slate Gray): Solid Stone - Granite, dense basalt, monolithic structural stone")
+  ("R-MAT-WALL"         104 "0,127,31"    "CONTINUOUS"  25  T    "ANSI32"    2.0  0.0  0   nil  "Color 104 (Green): Wall / Partition - Architectural walls, drywall partitions, masonry enclosures")
   ("R-MAT-WOOD-PANEL"   34  "135,70,25"   "CONTINUOUS"  25  T    "LINE"      5.0  0.0  0   nil  "Color 34 (Brown): Wood Panel - MDF, Plywood, Chipboard substrate cores")
   ("R-MAT-WOOD-SOLID"   30  "170,80,15"   "CONTINUOUS"  25  T    "ANSI38"    6.0  0.0  0   nil  "Color 30 (Orange): Solid Wood - Hardwood/softwood framing, solid timber lippings")
   ("R-MAT-WOOD-VENEER"  40  "150,95,30"   "CONTINUOUS"  15  T    "TRANS"     5.0  0.0  0   nil  "Color 40 (Light Brown): Wood Veneer - Natural wood veneer, HPL sheet, edge banding")

@@ -2816,15 +2816,7 @@
 
 ;; c:ML - Material Layer / Rectangle Workflow Entry Point
 (defun c:ML ( / ss matLayers promptStr kwStr kwMap suffix kw opt chosenLayer )
-  ;; Dual-mode selection: check pre-selection (Pickfirst) or prompt user
   (setq ss (ssget "_I"))
-  (if (or (null ss) (= (sslength ss) 0))
-    (progn
-      (princ "\nSelect objects to assign material or [Enter to draw rectangles]: ")
-      (setq ss (ssget))
-    )
-  )
-
   (if (and ss (> (sslength ss) 0))
     (CadSetup:PromptAndAssignLayer ss "R-MAT-*" "Material" T)
     (progn
@@ -3032,11 +3024,99 @@
 ;;; --------------------------------------------------------------------------
 ;; Dual-mode operation:
 ;;   1. If objects are pre-selected (Pickfirst) or selected via prompt, moves them
-;;      to Layer "0" and resets all properties to ByLayer, deeply normalizing
-;;      nested block definitions if blocks are included.
+;;      to Layer "0" and resets all properties (Color, Linetype, Lineweight,
+;;      Linetype Scale, Global Polyline Width, Thickness, Transparency) to ByLayer
+;;      and standard defaults, deeply normalizing nested block definitions.
 ;;   2. Always switches active layer (CLAYER) to "0" and resets drawing defaults
-;;      (CECOLOR, CELTYPE, CELWEIGHT) to ByLayer.
+;;      (CECOLOR, CELTYPE, CELWEIGHT, CELTSCALE, PLINEWID, THICKNESS, CETRANSPARENCY)
+;;      to ByLayer / default values.
 ;;   3. Retains selection for immediate follow-up operations.
+
+;; Direct fallback normalizer if Help_Layers.lsp is not yet loaded
+(defun CadSetup:NormalizeSelectionDirect (ss / i ent obj resPut coords n)
+  (if (and ss (= (type ss) 'PICKSET))
+    (progn
+      (setq i 0)
+      (while (< i (sslength ss))
+        (setq ent (ssname ss i))
+        (setq obj (vl-catch-all-apply 'vlax-ename->vla-object (list ent)))
+        (if (and obj (not (vl-catch-all-error-p obj)) (= (type obj) 'VLA-OBJECT))
+          (progn
+            ;; Layer: "0"
+            (vl-catch-all-apply 'vla-put-layer (list obj "0"))
+            ;; Color: ByLayer (256)
+            (vl-catch-all-apply 'vla-put-color (list obj 256))
+            ;; Linetype: "ByLayer"
+            (vl-catch-all-apply 'vla-put-linetype (list obj "ByLayer"))
+            ;; Lineweight: ByLayer (-1)
+            (if (vlax-property-available-p obj 'Lineweight)
+              (vl-catch-all-apply 'vla-put-lineweight (list obj -1))
+            )
+            ;; Linetype Scale (linescale): 1.0
+            (if (vlax-property-available-p obj 'LinetypeScale)
+              (vl-catch-all-apply 'vla-put-linetypescale (list obj 1.0))
+            )
+            ;; Global Width (polyline constant width): 0.0
+            (if (vlax-property-available-p obj 'ConstantWidth)
+              (progn
+                (setq resPut (vl-catch-all-apply 'vla-put-constantwidth (list obj 0.0)))
+                (if (vl-catch-all-error-p resPut)
+                  (vl-catch-all-apply
+                    '(lambda ( / coords n )
+                       (setq coords (vlax-get obj 'Coordinates))
+                       (if coords
+                         (progn
+                           (setq n 0)
+                           (while (< n (/ (length coords) 2))
+                             (vl-catch-all-apply 'vla-setwidth (list obj n 0.0 0.0))
+                             (setq n (1+ n))
+                           )
+                         )
+                       )
+                     )
+                  )
+                )
+              )
+            )
+            ;; Heavy 2D Polyline vertex widths: 0.0
+            (if (= (vla-get-objectname obj) "AcDb2dPolyline")
+              (progn
+                (vl-catch-all-apply 'vla-put-defaultstartwidth (list obj 0.0))
+                (vl-catch-all-apply 'vla-put-defaultendwidth (list obj 0.0))
+                (vlax-for vtx obj
+                  (if (= (vla-get-objectname vtx) "AcDb2dVertex")
+                    (progn
+                      (vl-catch-all-apply 'vla-put-startwidth (list vtx 0.0))
+                      (vl-catch-all-apply 'vla-put-endwidth (list vtx 0.0))
+                    )
+                  )
+                )
+              )
+            )
+            ;; Transparency: "ByLayer"
+            (if (vlax-property-available-p obj 'Transparency)
+              (vl-catch-all-apply 'vla-put-transparency (list obj "ByLayer"))
+            )
+            ;; PlotStyleName: "ByLayer"
+            (if (vlax-property-available-p obj 'PlotStyleName)
+              (vl-catch-all-apply 'vla-put-plotstylename (list obj "ByLayer"))
+            )
+            ;; Material: "ByLayer"
+            (if (vlax-property-available-p obj 'Material)
+              (vl-catch-all-apply 'vla-put-material (list obj "ByLayer"))
+            )
+            ;; Thickness: 0.0
+            (if (vlax-property-available-p obj 'Thickness)
+              (vl-catch-all-apply 'vla-put-thickness (list obj 0.0))
+            )
+          )
+        )
+        (setq i (1+ i))
+      )
+    )
+  )
+)
+
 (defun c:L0 ( / *error* ss count oldEcho )
   (defun *error* (msg)
     (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
@@ -3065,8 +3145,16 @@
 
   ;; Step 2: Normalize selected geometry if any
   (if (and ss (> (sslength ss) 0))
-    (if (boundp 'CadSetup:NormalizeToLayer0ByLayer)
-      (CadSetup:NormalizeToLayer0ByLayer ss T)
+    (progn
+      (if (and (not (boundp 'CadSetup:NormalizeToLayer0ByLayer))
+               (boundp 'CadSetup:GetDir)
+               CadSetup:GetDir)
+        (vl-catch-all-apply 'load (list (strcat (CadSetup:GetDir) "\\Helpers\\Help_Layers.lsp")))
+      )
+      (if (boundp 'CadSetup:NormalizeToLayer0ByLayer)
+        (CadSetup:NormalizeToLayer0ByLayer ss T)
+        (CadSetup:NormalizeSelectionDirect ss)
+      )
     )
   )
 
@@ -3075,10 +3163,14 @@
   (setvar "CECOLOR" "BYLAYER")
   (setvar "CELTYPE" "BYLAYER")
   (setvar "CELWEIGHT" -1)
+  (vl-catch-all-apply 'setvar (list "CELTSCALE" 1.0))
+  (vl-catch-all-apply 'setvar (list "PLINEWID" 0.0))
+  (vl-catch-all-apply 'setvar (list "THICKNESS" 0.0))
+  (vl-catch-all-apply 'setvar (list "CETRANSPARENCY" "ByLayer"))
 
   (if ss (sssetfirst nil ss))
 
-  (princ "\n[L0] Active layer set to \"0\". Defaults locked to ByLayer.")
+  (princ "\n[L0] Active layer set to \"0\". Defaults locked to ByLayer (Linescale=1.0, Width=0.0).")
   (setvar "CMDECHO" oldEcho)
   (princ)
 )

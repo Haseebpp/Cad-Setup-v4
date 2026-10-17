@@ -78,6 +78,64 @@
   )
 )
 
+;; CadSetup:IsXref - Checks if an entity is an external reference (Xref)
+(defun CadSetup:IsXref (ent / el blkName blkRec)
+  (if (and ent (= (type ent) 'ENAME))
+    (progn
+      (setq el (entget ent))
+      (if (= (cdr (assoc 0 el)) "INSERT")
+        (progn
+          (setq blkName (cdr (assoc 2 el)))
+          (if (and blkName (setq blkRec (tblsearch "BLOCK" blkName)))
+            (/= 0 (logand 4 (cdr (assoc 70 blkRec))))
+            nil
+          )
+        )
+        nil
+      )
+    )
+    nil
+  )
+)
+
+;; CadSetup:IsVertical - Checks if an entity is taller than wide (Height > Width in WCS)
+(defun CadSetup:IsVertical (ent / bbox pMin pMax w h)
+  (if (and ent
+           (= (type ent) 'ENAME)
+           (setq bbox (cond
+                        ((boundp 'CadSetup:GetBoundingBox) (CadSetup:GetBoundingBox ent))
+                        ((boundp 'CadSetup:GetBoundingBoxDxf) (CadSetup:GetBoundingBoxDxf ent))
+                        (t nil))))
+    (progn
+      (setq pMin (car bbox)
+            pMax (cadr bbox)
+            w    (abs (- (car pMax) (car pMin)))
+            h    (abs (- (cadr pMax) (cadr pMin))))
+      (> (- h w) 0.0001)
+    )
+    nil
+  )
+)
+
+;; CadSetup:IsHorizontal - Checks if an entity is wider than tall (Width > Height in WCS)
+(defun CadSetup:IsHorizontal (ent / bbox pMin pMax w h)
+  (if (and ent
+           (= (type ent) 'ENAME)
+           (setq bbox (cond
+                        ((boundp 'CadSetup:GetBoundingBox) (CadSetup:GetBoundingBox ent))
+                        ((boundp 'CadSetup:GetBoundingBoxDxf) (CadSetup:GetBoundingBoxDxf ent))
+                        (t nil))))
+    (progn
+      (setq pMin (car bbox)
+            pMax (cadr bbox)
+            w    (abs (- (car pMax) (car pMin)))
+            h    (abs (- (cadr pMax) (cadr pMin))))
+      (> (- w h) 0.0001)
+    )
+    nil
+  )
+)
+
 ;; ===========================================================================
 ;; GENERALIZED SELECTION FILTER ENGINE
 ;; ===========================================================================

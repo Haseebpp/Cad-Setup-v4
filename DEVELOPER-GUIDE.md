@@ -165,7 +165,7 @@ Use this pattern when the command delegates to a native AutoCAD interactive comm
    - `02_Layers.lsp`: Quick layer operations (`RL`, `DCL`, `L0`, `BLL`)
    - `03_Blocks.lsp`: Block generation, rotation, alignment (`CB`, `OB`, `RB`, `BL`)
    - `04_Layout-Views.lsp`: Sheet, viewport, and presentation tools (`TS`, `A3SERIES`, `VPCLIPRECTANGLE`, `VR`)
-   - `05_Selection-Filters.lsp`: Fast entity filters (`ssget` wrappers: `SR`, `SL`, `SB`, `SH`, `SA`, `SW`)
+   - `05_Selection-Filters.lsp`: Fast entity filters (`ssget` wrappers: `SR`, `SL`, `ST`, `SB`, `SX`, `SHT`/`SH`, `SP`, `SLN`, `SCIR`, `SV`, `STB`, `SW`, `SA`)
    - `06_Utilities.lsp`: Calculation, cleanup, repair (`TC`, `BBOX`, `CTRANS`, `FL0`, `HSCALE`/`HSC`, `HROT`/`HR`, `WF`, `WR`, `LST`)
    - `07_Copy-Utilities.lsp`: Smart duplication & cloning (`CIP`, `COPYSEG`/`CS`)
    - `08_Dynamic-Stretch.lsp`: Multi-boundary dynamic stretch (`DYNSTRETCH`, `DS`)

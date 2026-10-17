@@ -97,7 +97,7 @@ d:\HASEEB\Cad-Setup-v4\
 │   ├── 02_Layers.lsp           ; Layer management commands (RL, DCL, L0, BLL)
 │   ├── 03_Blocks.lsp           ; Block creation, transforms & visual palette (GB/G, DB, UB, RB, RBH, RBV, BL, 8)
 │   ├── 04_Layout-Views.lsp     ; Viewport and presentation tools (TS, A3SERIES, VPCLIPRECTANGLE, VR)
-│   ├── 05_Selection-Filters.lsp; Fast selection isolators (SR, SL, SB, SH, SA, SW)
+│   ├── 05_Selection-Filters.lsp; Fast selection isolators (SR, SL, ST, SB, SX, SHT/SH, SP, SLN, SCIR, SV, STB, SW, SA)
 │   ├── 06_Utilities.lsp        ; Geometry calculation & repair (TC, BBOX, CTRANS, FL0, HSCALE/HSC, HROT/HR, PUA, WF, WR, LST)
 │   ├── 07_Copy-Utilities.lsp   ; Smart duplication & segment cloning (CIP, COPYSEG/CS)
 │   ├── 08_Dynamic-Stretch.lsp  ; Multi-boundary dynamic stretch (DYNSTRETCH, DS)

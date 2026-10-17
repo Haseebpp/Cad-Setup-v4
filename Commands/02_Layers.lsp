@@ -244,10 +244,14 @@
       (setvar "CECOLOR" "BYLAYER")
       (setvar "CELTYPE" "BYLAYER")
       (setvar "CELWEIGHT" -1)
+      (vl-catch-all-apply 'setvar (list "CELTSCALE" 1.0))
+      (vl-catch-all-apply 'setvar (list "PLINEWID" 0.0))
+      (vl-catch-all-apply 'setvar (list "THICKNESS" 0.0))
+      (vl-catch-all-apply 'setvar (list "CETRANSPARENCY" "ByLayer"))
 
       (if ss (sssetfirst nil ss))
 
-      (princ "\n[L0] Active layer set to \"0\". Defaults locked to ByLayer.")
+      (princ "\n[L0] Active layer set to \"0\". Defaults locked to ByLayer (Linescale=1.0, Width=0.0).")
       (setvar "CMDECHO" oldEcho)
       (princ)
     )

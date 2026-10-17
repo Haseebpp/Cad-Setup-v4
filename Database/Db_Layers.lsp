@@ -42,7 +42,7 @@
 
   ;; Linework
   ("R-LINE-CNTR"        1   "180,20,20"   "CENTER2"     13  T    "NONE"      1.0  0.0  0   nil  "Color 1 (Red): Center Line - Alignment centerlines, symmetry axes, positioning datums")
-  ("R-LINE-CUT"         7   "0,0,0"       "CONTINUOUS"  50  T    "NONE"      1.0  0.0  0   nil  "Color 7 (White/Black): Cut Line - Primary section cuts, heavy substrate slicing profiles")
+  ("R-LINE-CUT"         3   "0,120,50"    "CONTINUOUS"  30  T    "NONE"      1.0  0.0  0   nil  "Color 3 (Green): Cut Line - Primary section cuts, heavy substrate slicing profiles")
   ("R-LINE-DETL"        2   "165,110,0"   "CONTINUOUS"  18  T    "NONE"      1.0  0.0  0   nil  "Color 2 (Yellow): Detail Line - Secondary internal visible edges, panel grooves, rebates")
   ("R-LINE-HIDD"        9   "110,115,120" "HIDDEN2"     15  T    "NONE"      1.0  0.0  0   nil  "Color 9 (Light Gray): Hidden Line - Concealed framing, rear battens, internal shelf positions")
   ("R-LINE-VISB"        4   "0,110,150"   "CONTINUOUS"  25  T    "NONE"      1.0  0.0  0   nil  "Color 4 (Cyan): Visible Line - External carcass outlines, visible elevation edges")

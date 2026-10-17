@@ -84,7 +84,7 @@ Upon startup, the system automatically initializes all 36 production layers, lin
 ### 1. Numbered Workflow Keys (0–8, -)
 Single-digit drafting shortcuts mapped to top-row keys for rapid execution. Each key safely sets the destination standard layer, executes the drafting tool, and **restores the active working layer**:
 
-* `[0]` / `L0` / `BY0` : **Layer 0 & ByLayer Normalizer** — Dual-mode reset. When objects are pre-selected (or picked via prompt), instantly moves them to Layer `0` and resets all properties (Color, Linetype, Lineweight, Transparency, PlotStyle, Material) to `ByLayer`, deeply normalizing nested entities inside block definitions. Always sets active working layer (`CLAYER`) to `0` and locks drafting defaults (`CECOLOR`, `CELTYPE`, `CELWEIGHT`) to `ByLayer`. Retains selection for follow-up editing.
+* `[0]` / `L0` / `BY0` : **Layer 0 & ByLayer Normalizer** — Dual-mode reset. When objects are pre-selected (or picked via prompt), instantly moves them to Layer `0` and resets all properties (Color, Linetype, Lineweight, Linetype Scale, Polyline Global Width, Thickness, Transparency, PlotStyle, Material) to `ByLayer` and standard defaults (Linescale 1.0, Width 0.0), deeply normalizing nested entities inside block definitions. Always sets active working layer (`CLAYER`) to `0` and locks drafting defaults (`CECOLOR`, `CELTYPE`, `CELWEIGHT`, `CELTSCALE`, `PLINEWID`, `THICKNESS`) to ByLayer / defaults. Retains selection for follow-up editing.
 * `[1]` / `HL` : **Help Line & Guide Points** — Interactive node point drafting on `01-HELP-LINE` with dynamic collinear line segment or infinite xline generation based on active `HLMODE`. Pre-selection extracts vertices into guide points.
 * `[1M]` / `HLMODE` : **Help Line Mode** — Switches `01-HELP-LINE` generation mode (`0` = Only Points, `1` = Collinear Line Segments [Default], `2` = Collinear Infinite Xlines) and instantly refreshes the layer.
 * `[1X]` : **Toggle Help Line Mode (1 ↔ 2)** — Instantly toggles between Mode 1 (Line Segments) and Mode 2 (Infinite Xlines) with a single keystroke.
@@ -149,10 +149,19 @@ Isolate or exclude entity categories in one click without touching layer freeze/
 |---|:---:|:---:|
 | **Dimensions** | `SR` | `SRI` |
 | **Leaders & Multileaders** | `SL` | `SLI` |
+| **Text & MText** | `ST` | `STI` |
 | **Block References** | `SB` | `SBI` |
-| **Hatches** | `SH` | `SHI` |
-| **All Annotations** | `SA` | `SAI` |
+| **External References (Xrefs)** | `SX` | `SXI` |
+| **Hatches** | `SHT` / `SH` | `SHTI` / `SHI` |
+| **Polylines** | `SP` | `SPI` |
+| **Lines** | `SLN` | `SLNI` |
+| **Circles & Arcs** | `SCIR` | `SCIRI` |
+| **Viewports** | `SV` | `SVI` |
+| **Tables** | `STB` | `STBI` |
 | **Wipeouts** | `SW` | `SWI` |
+| **All Annotations** | `SA` | `SAI` |
+| **Vertical / Taller (Height > Width)** | `SVERT` | `SVERTI` |
+| **Horizontal / Wider (Width > Height)** | `SHOR` | `SHORI` |
 
 ---
 
@@ -279,7 +288,7 @@ Cad-Setup-v4/
 │   ├── 02_Layers.lsp           # Layer loading & legend generator (RL, DCL, L0, BLL)
 │   ├── 03_Blocks.lsp           # Auto block creator & in-place transforms (CB, RB, RBH)
 │   ├── 04_Layout-Views.lsp     # Layout & presentation tools (TS, VR, A3SERIES)
-│   ├── 05_Selection-Filters.lsp# Instant entity filters (SR, SL, SB, SH, SA, SW)
+│   ├── 05_Selection-Filters.lsp# Instant entity filters (SR, SL, ST, SB, SX, SHT/SH, SP, SLN, SCIR, SV, STB, SW, SA)
 │   ├── 06_Utilities.lsp        # Geometry utilities (TC, BBOX, FL0, PUA, LST)
 │   ├── 07_Copy-Utilities.lsp   # Smart duplication & cloning (CIP, COPYSEG/CS)
 │   ├── 08_Dynamic-Stretch.lsp  # Multi-boundary dynamic stretch (DYNSTRETCH/DS)

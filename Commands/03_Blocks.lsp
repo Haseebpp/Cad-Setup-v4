@@ -7,7 +7,7 @@
 (vl-load-com)
 
 ;;; --------------------------------------------------------------------------
-;;; 1. AUTO BLOCK CREATION & VERSION ENGINE (GB, DB, UB)
+;;; 1. AUTO BLOCK CREATION & VERSION ENGINE (GB, DB, DSL, UB)
 ;;; --------------------------------------------------------------------------
 
 ;; CadSetup:FormatBlockTimestamp - Formats current date/time to "DD.MM.YYYY@HH.MM.SS"
@@ -224,6 +224,234 @@
 
   (setvar 'attreq oldAtt)
   (setvar 'cmdecho oldCmd)
+  (princ)
+)
+
+;; CadSetup:GetSsBoundingBox - Collective bounding box of selection set in current UCS
+(defun CadSetup:GetSsBoundingBox (ss / bbox i ent obj minPt maxPt p1 p2 ll ur allMin allMax)
+  (if (and (boundp 'CadSetup:GetBoundingBoxUcs) (setq bbox (CadSetup:GetBoundingBoxUcs ss)))
+    bbox
+    (progn
+      (setq allMin nil allMax nil)
+      (repeat (setq i (sslength ss))
+        (setq ent (ssname ss (setq i (1- i)))
+              obj (vlax-ename->vla-object ent))
+        (if (not (vl-catch-all-error-p (vl-catch-all-apply 'vla-getboundingbox (list obj 'minPt 'maxPt))))
+          (progn
+            (setq p1 (vlax-safearray->list minPt)
+                  p2 (vlax-safearray->list maxPt))
+            ;; Transform from WCS to Current UCS
+            (setq p1 (trans p1 0 1)
+                  p2 (trans p2 0 1))
+            (setq ll (list (min (car p1) (car p2)) (min (cadr p1) (cadr p2)) (min (caddr p1) (caddr p2)))
+                  ur (list (max (car p1) (car p2)) (max (cadr p1) (cadr p2)) (max (caddr p1) (caddr p2))))
+            (setq allMin (if allMin
+                           (list (min (car allMin) (car ll))
+                                 (min (cadr allMin) (cadr ll))
+                                 (min (caddr allMin) (caddr ll)))
+                           ll)
+                  allMax (if allMax
+                           (list (max (car allMax) (car ur))
+                                 (max (cadr allMax) (cadr ur))
+                                 (max (caddr allMax) (caddr ur)))
+                           ur))
+          )
+        )
+      )
+      (if (and allMin allMax)
+        (list allMin allMax)
+        nil
+      )
+    )
+  )
+)
+
+;; DSL : Dynamic Stretch Linear - Auto-create dynamic block with Width & Height linear stretch
+(defun c:DSL (/ *error* ss bbox minPt maxPt basePt w h tol dimOffset
+                handle ts blkName oldCmd oldAtt oldOsm oldBlkLock oldCmdDia oldActionBar
+                ptLabelX ptFrameX1 ptFrameX2 ptActX entBefore pX
+                ptLabelY ptFrameY1 ptFrameY2 ptActY pY newEnt)
+  (defun *error* (msg)
+    ;; If trapped inside Block Editor on failure, close and discard
+    (if (and (getvar "BLOCKEDITOR") (= (getvar "BLOCKEDITOR") 1))
+      (vl-catch-all-apply 'vl-cmdf (list "._BCLOSE" "_Discard"))
+    )
+    (if oldActionBar (setvar 'bactionbarmode oldActionBar))
+    (if oldAtt (setvar 'attreq oldAtt))
+    (if oldCmd (setvar 'cmdecho oldCmd))
+    (if oldOsm (setvar 'osmode oldOsm))
+    (if oldBlkLock (setvar 'blockeditlock oldBlkLock))
+    (if oldCmdDia (setvar 'cmddia oldCmdDia))
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[DSL] Error: " msg))
+    )
+    (princ)
+  )
+
+  (setq oldCmd       (getvar 'cmdecho)
+        oldAtt       (getvar 'attreq)
+        oldOsm       (getvar 'osmode)
+        oldBlkLock   (getvar 'blockeditlock)
+        oldCmdDia    (getvar 'cmddia)
+        oldActionBar (if (getvar 'bactionbarmode) (getvar 'bactionbarmode) 0))
+
+  (setvar 'cmdecho 0)
+  (setvar 'attreq 0)
+
+  (setq ss (ssget "_I"))
+  (if (not ss)
+    (progn
+      (princ "\nSelect objects to convert into Dynamic Stretch Block [DSL]: ")
+      (setq ss (ssget))
+    )
+  )
+
+  (if ss
+    (progn
+      ;; Calculate collective bounding box in current UCS
+      (setq bbox (CadSetup:GetSsBoundingBox ss))
+      (if (not bbox)
+        (progn
+          (princ "\n[DSL] Error: Could not determine bounding box for selection.")
+          (setvar 'cmdecho oldCmd)
+          (setvar 'attreq oldAtt)
+          (exit)
+        )
+      )
+
+      (setq minPt  (car bbox)
+            maxPt  (cadr bbox)
+            basePt (list (car minPt) (cadr minPt) 0.0)
+            w      (- (car maxPt) (car minPt))
+            h      (- (cadr maxPt) (cadr minPt)))
+
+      (if (or (<= w 0.001) (<= h 0.001))
+        (progn
+          (princ "\n[DSL] Error: Objects must have 2D extent (Width and Height > 0.001).")
+          (setvar 'cmdecho oldCmd)
+          (setvar 'attreq oldAtt)
+          (exit)
+        )
+      )
+
+      (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
+
+      ;; Generate unique standard DYN block name
+      (setq handle  (CadSetup:GetNextDbHandle)
+            ts      (CadSetup:FormatBlockTimestamp)
+            blkName (CadSetup:BuildBlockName "DYN" handle 1 ts ts)
+            blkName (CadSetup:EnsureUniqueBlockName blkName))
+
+      ;; Define standard block at Bottom-Left base point (entities converted to block definition)
+      (setvar 'osmode 0)
+      (command "._-block" blkName "_non" basePt ss "")
+
+      ;; Prepare dynamic block parameters & action geometry (inside Block Editor, basePt is at 0,0,0)
+      (setq tol       0.001
+            dimOffset (max 1.0 (* 0.08 (max w h))))
+
+      ;; Geometry for Horizontal (Width) Stretch along bottom edge:
+      ;; Grip at (W, 0, 0), stretching right half: [W/2 - tol, W + tol] across full height [-tol, H + tol]
+      (setq ptLabelX   (list (/ w 2.0) (- 0.0 dimOffset) 0.0)
+            ptFrameX1  (list (- (/ w 2.0) tol) (- 0.0 tol) 0.0)
+            ptFrameX2  (list (+ w tol) (+ h tol) 0.0)
+            ptActX     (list (* 0.75 w) (* -1.5 dimOffset) 0.0))
+
+      ;; Geometry for Vertical (Height) Stretch along left edge:
+      ;; Grip at (0, H, 0), stretching top half: [H/2 - tol, H + tol] across full width [-tol, W + tol]
+      (setq ptLabelY   (list (- 0.0 dimOffset) (/ h 2.0) 0.0)
+            ptFrameY1  (list (- 0.0 tol) (- (/ h 2.0) tol) 0.0)
+            ptFrameY2  (list (+ w tol) (+ h tol) 0.0)
+            ptActY     (list (* -1.5 dimOffset) (* 0.75 h) 0.0))
+
+      ;; Lock BACTIONBARMODE=0 (classic icons with action-location prompt), unlock BEDIT, suppress dialogs
+      (if (getvar 'bactionbarmode) (setvar 'bactionbarmode 0))
+      (setvar 'blockeditlock 0)
+      (setvar 'cmddia 0)
+
+      ;; Open Block Editor for dynamic authoring
+      (command "._BEDIT" blkName)
+
+      (if (= (getvar "BLOCKEDITOR") 1)
+        (progn
+          ;; Frame the entire block plus generous margin so crossing selection (_C) never clips off-screen
+          (command "._ZOOM" "_Window"
+                   (list (* -3.0 dimOffset) (* -3.0 dimOffset) 0.0)
+                   (list (+ w (* 3.0 dimOffset)) (+ h (* 3.0 dimOffset)) 0.0))
+
+          ;; 1. Horizontal Linear Parameter ("Width") on bottom edge with 1 grip on right (W, 0, 0)
+          (setq entBefore (entlast))
+          (if (not (vl-cmdf "._BPARAMETER" "_Linear" "_Name" "Width" '(0.0 0.0 0.0) (list w 0.0 0.0) ptLabelX 1))
+            (command "._BPARAMETER" "_Linear" '(0.0 0.0 0.0) (list w 0.0 0.0) ptLabelX 1)
+          )
+          (setq pX (entlast))
+
+          ;; Horizontal Stretch Action (Right half stretch) via deterministic single command pipeline
+          (if (and pX (not (eq pX entBefore)))
+            (command "._BACTIONTOOL" "_Stretch"
+                     (list pX (list (/ w 2.0) 0.0 0.0))  ; parameter selection
+                     (list w 0.0 0.0)                    ; parameter point (grip)
+                     ptFrameX1                           ; stretch frame corner 1
+                     ptFrameX2                           ; stretch frame corner 2
+                     "_C" ptFrameX1 ptFrameX2 ""         ; objects crossing window
+                     ptActX)                             ; action icon location
+          )
+
+          ;; 2. Vertical Linear Parameter ("Height") on left edge with 1 grip on top (0, H, 0)
+          (setq entBefore (entlast))
+          (if (not (vl-cmdf "._BPARAMETER" "_Linear" "_Name" "Height" '(0.0 0.0 0.0) (list 0.0 h 0.0) ptLabelY 1))
+            (command "._BPARAMETER" "_Linear" '(0.0 0.0 0.0) (list 0.0 h 0.0) ptLabelY 1)
+          )
+          (setq pY (entlast))
+
+          ;; Vertical Stretch Action (Top half stretch) via deterministic single command pipeline
+          (if (and pY (not (eq pY entBefore)))
+            (command "._BACTIONTOOL" "_Stretch"
+                     (list pY (list 0.0 (/ h 2.0) 0.0))  ; parameter selection
+                     (list 0.0 h 0.0)                    ; parameter point (grip)
+                     ptFrameY1                           ; stretch frame corner 1
+                     ptFrameY2                           ; stretch frame corner 2
+                     "_C" ptFrameY1 ptFrameY2 ""         ; objects crossing window
+                     ptActY)                             ; action icon location
+          )
+
+          ;; Save and close Block Editor
+          (command "._BSAVE")
+          (command "._BCLOSE")
+          (if (= (getvar "BLOCKEDITOR") 1)
+            (command "._BCLOSE" "_Yes")
+          )
+        )
+      )
+
+      ;; Restore blockeditlock, cmddia, osmode, and bactionbarmode
+      (if (getvar 'bactionbarmode) (setvar 'bactionbarmode oldActionBar))
+      (setvar 'blockeditlock oldBlkLock)
+      (setvar 'cmddia oldCmdDia)
+      (setvar 'osmode oldOsm)
+
+      ;; Re-insert the newly created dynamic block in-place at base point
+      (command "._-insert" blkName "_non" basePt 1.0 1.0 0.0)
+
+      ;; Select/highlight the newly inserted block reference
+      (setq newEnt (entlast))
+      (if newEnt
+        (sssetfirst nil (ssadd newEnt (ssadd)))
+      )
+
+      (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+      (princ (strcat "\n[DSL] Dynamic Stretch Block created: \"" blkName "\" [W: " (rtos w 2 2) " x H: " (rtos h 2 2) "]."))
+    )
+    (princ "\n[DSL] No objects selected.")
+  )
+
+  (if (getvar 'bactionbarmode) (setvar 'bactionbarmode oldActionBar))
+  (setvar 'attreq oldAtt)
+  (setvar 'cmdecho oldCmd)
+  (setvar 'osmode oldOsm)
+  (setvar 'blockeditlock oldBlkLock)
+  (setvar 'cmddia oldCmdDia)
   (princ)
 )
 
@@ -1040,6 +1268,6 @@
 
 
 (if *CadSetup-Debug*
-  (princ "\n[03_Blocks.lsp] Block creation, transform, and Visual Joinery Palette loaded (GB/G, DB, UB, RB, RBH/RH, RBV/RV, BL, 8).")
+  (princ "\n[03_Blocks.lsp] Block creation, transform, and Visual Joinery Palette loaded (GB/G, DB, DSL, UB, RB, RBH/RH, RBV/RV, BL, 8).")
 )
 (princ)

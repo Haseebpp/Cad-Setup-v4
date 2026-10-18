@@ -335,16 +335,22 @@
 ;;; --------------------------------------------------------------------------
 
 ;; Helper: Extract Bounding Box Center using Geometry Helpers
-(defun _FastMidPt (obj / bbox)
+(defun _FastMidPt (obj / bbox insPt)
   (setq bbox (CadSetup:GetBoundingBox obj))
   (if bbox
     (CadSetup:MidPoint (car bbox) (cadr bbox))
-    nil
+    (progn
+      (setq insPt (vl-catch-all-apply 'vla-get-InsertionPoint (list obj)))
+      (if (and (not (vl-catch-all-error-p insPt)) insPt)
+        (vlax-safearray->list (vlax-variant-value insPt))
+        nil
+      )
+    )
   )
 )
 
 ;; Master Transform Engine
-(defun _ExecTransform (mode / *error* echo ss i ent obj mid ucsMid pt2 new-obj)
+(defun _ExecTransform (mode / *error* echo ss i ent obj mid rot vecH vecV pt2 new-obj res)
   (defun *error* (msg)
     (if echo (setvar 'CMDECHO echo))
     (CadSetup:UndoReset)
@@ -359,8 +365,13 @@
 
   (CadSetup:UndoStart)
 
-  ;; "_:L" filter rejects locked layers instantly at selection time
-  (if (setq ss (ssget "_:L" '((0 . "INSERT"))))
+  ;; Check pre-selection first, fallback to prompt with locked-layer filter
+  (setq ss (ssget "_I" '((0 . "INSERT"))))
+  (if (not ss)
+    (setq ss (ssget "_:L" '((0 . "INSERT"))))
+  )
+
+  (if ss
     (repeat (setq i (sslength ss))
       (setq ent (ssname ss (setq i (1- i)))
             obj (vlax-ename->vla-object ent))
@@ -369,26 +380,57 @@
         (cond
           ;; 90-Degree Clockwise Rotation around center
           ((eq mode 'ROTATE)
-           (vla-rotate obj (vlax-3d-point mid) (- (/ pi 2.0)))
-          )
-
-          ;; Flip Horizontal (Mirror across vertical midpoint axis in current UCS)
-          ((eq mode 'FLIP_H)
-           (setq ucsMid (trans mid 0 1))
-           (setq pt2 (trans (list (car ucsMid) (+ (cadr ucsMid) 100.0) (caddr ucsMid)) 1 0))
-           (setq new-obj (vl-catch-all-apply 'vla-mirror (list obj (vlax-3d-point mid) (vlax-3d-point pt2))))
-           (if (not (vl-catch-all-error-p new-obj))
-             (vla-delete obj)
+           (setq res (vl-catch-all-apply 'vla-rotate (list obj (vlax-3d-point mid) (- (/ pi 2.0)))))
+           (if (not (vl-catch-all-error-p res))
+             (vla-update obj)
            )
           )
 
-          ;; Flip Vertical (Mirror across horizontal midpoint axis in current UCS)
-          ((eq mode 'FLIP_V)
-           (setq ucsMid (trans mid 0 1))
-           (setq pt2 (trans (list (+ (car ucsMid) 100.0) (cadr ucsMid) (caddr ucsMid)) 1 0))
+          ;; Flip Horizontal: Mirror across block's local vertical axis (flips along original horizontal)
+          ((eq mode 'FLIP_H)
+           (setq rot (vl-catch-all-apply 'vla-get-Rotation (list obj)))
+           (if (or (vl-catch-all-error-p rot) (null rot))
+             (setq rot (cdr (assoc 50 (entget ent))))
+           )
+           (if (null rot) (setq rot 0.0))
+
+           ;; Vector along block's local vertical axis in WCS
+           (setq vecV (vl-catch-all-apply 'trans (list (list (- (sin rot)) (cos rot) 0.0) ent 0 1)))
+           (if (or (vl-catch-all-error-p vecV) (null vecV))
+             (setq vecV (list (- (sin rot)) (cos rot) 0.0))
+           )
+
+           (setq pt2 (mapcar '+ mid (mapcar '(lambda (x) (* x 100.0)) vecV)))
            (setq new-obj (vl-catch-all-apply 'vla-mirror (list obj (vlax-3d-point mid) (vlax-3d-point pt2))))
            (if (not (vl-catch-all-error-p new-obj))
-             (vla-delete obj)
+             (progn
+               (vla-delete obj)
+               (vla-update new-obj)
+             )
+           )
+          )
+
+          ;; Flip Vertical: Mirror across block's local horizontal axis (flips along original vertical)
+          ((eq mode 'FLIP_V)
+           (setq rot (vl-catch-all-apply 'vla-get-Rotation (list obj)))
+           (if (or (vl-catch-all-error-p rot) (null rot))
+             (setq rot (cdr (assoc 50 (entget ent))))
+           )
+           (if (null rot) (setq rot 0.0))
+
+           ;; Vector along block's local horizontal axis in WCS
+           (setq vecH (vl-catch-all-apply 'trans (list (list (cos rot) (sin rot) 0.0) ent 0 1)))
+           (if (or (vl-catch-all-error-p vecH) (null vecH))
+             (setq vecH (list (cos rot) (sin rot) 0.0))
+           )
+
+           (setq pt2 (mapcar '+ mid (mapcar '(lambda (x) (* x 100.0)) vecH)))
+           (setq new-obj (vl-catch-all-apply 'vla-mirror (list obj (vlax-3d-point mid) (vlax-3d-point pt2))))
+           (if (not (vl-catch-all-error-p new-obj))
+             (progn
+               (vla-delete obj)
+               (vla-update new-obj)
+             )
            )
           )
         )

@@ -388,9 +388,9 @@
   (setvar "CMDECHO" 0)
 
   (setq orig-lun   (CadSetup:SafeGetVar "LUNITS" 2)
-        orig-lupr  (CadSetup:SafeGetVar "LUPREC" 4)
+        orig-lupr  (CadSetup:SafeGetVar "LUPREC" 2)
         orig-aun   (CadSetup:SafeGetVar "AUNITS" 0)
-        orig-aupr  (CadSetup:SafeGetVar "AUPREC" 0)
+        orig-aupr  (CadSetup:SafeGetVar "AUPREC" 2)
         orig-ins   (CadSetup:SafeGetVar "INSUNITS" 4)
         orig-meas  (CadSetup:SafeGetVar "MEASUREMENT" 1)
         orig-angd  (CadSetup:SafeGetVar "ANGDIR" 0)

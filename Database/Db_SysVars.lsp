@@ -21,7 +21,7 @@
   ("INSUNITS"           4          "Units"       "Millimeters - Prevents scaling chaos on XREF insert")
   ("MEASUREMENT"        1          "Units"       "Metric standards (loads acadiso.lin & acadiso.pat)")
   ("LUNITS"             2          "Units"       "Decimal units format")
-  ("LUPREC"             1          "Units"       "Linear display precision (0.0 mm)")
+  ("LUPREC"             2          "Units"       "Linear display precision (0.00 mm)")
   ("AUNITS"             0          "Units"       "Decimal degrees angular format")
   ("AUPREC"             2          "Units"       "Angular display precision (0.00°)")
   ("ANGDIR"             0          "Units"       "Counter-clockwise positive angle calculation")

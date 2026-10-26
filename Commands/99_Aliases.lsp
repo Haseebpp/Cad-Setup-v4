@@ -296,7 +296,17 @@
 )
 
 ;;; --- SELECTION & ISOLATION ------------------------------------------------
-(defun c:SS  () (initcommandversion) (command "_.SELECTSIMILAR")    (princ)) ; SS  -> Select all matching objects by type/layer
+(defun c:SS ( / ssP)
+  (initcommandversion)
+  (if (ssget "_I")
+    (command "_.SELECTSIMILAR")
+    (if (setq ssP (ssget "_P"))
+      (sssetfirst nil ssP)
+      (command "_.SELECTSIMILAR")
+    )
+  )
+  (princ)
+) ; SS  -> Select Similar (if objects selected) or Select Previous (if nothing selected)
 (defun c:QSL () (initcommandversion) (command "_.QSELECT")          (princ)) ; QSL -> Quick Select filter dialog (renamed from QS to prevent overwrite)
 (defun c:IS  () (initcommandversion) (command "_.ISOLATEOBJECTS")   (princ)) ; IS  -> Isolate selected entities (hide all others)
 (defun c:HO  () (initcommandversion) (command "_.HIDEOBJECTS")      (princ)) ; HO  -> Hide selected entities

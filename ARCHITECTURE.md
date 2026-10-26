@@ -95,7 +95,7 @@ d:\HASEEB\Cad-Setup-v4\
 │   ├── 00_System-Variables.lsp ; Applies sysvars from Database/Db_SysVars.lsp (APPLY-SYSVARS, RSV)
 │   ├── 01_Workflow-Keys.lsp    ; Fast drafting key shortcuts (0=L0, 1=HL, 2=VP, 3=GL, 4=LL, 5=ML, 6=AD, 7=HD, 8=BL, `=R-)
 │   ├── 02_Layers.lsp           ; Layer management commands (RL, DCL, L0, BLL)
-│   ├── 03_Blocks.lsp           ; Block creation, transforms & visual palette (GB/G, DB, UB, RB, RBH, RBV, BL, 8)
+│   ├── 03_Blocks.lsp           ; Block creation, transforms & visual palette (GB/G, DB, DSL, UB [Unique Block], RB, RBH, RBV, BL, 8)
 │   ├── 04_Layout-Views.lsp     ; Viewport and presentation tools (TS, A3SERIES, VPCLIPRECTANGLE, VR)
 │   ├── 05_Selection-Filters.lsp; Fast selection isolators (SR, SL, ST, SB, SX, SHT/SH, SP, SLN, SCIR, SV, STB, SW, SA)
 │   ├── 06_Utilities.lsp        ; Geometry calculation & repair (TC, BBOX, CTRANS, FL0, HSCALE/HSC, HROT/HR, PUA, WF, WR, LST)

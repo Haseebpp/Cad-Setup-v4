@@ -53,7 +53,7 @@
   ;; -------------------------------------------------------------------------
   ;; 4. Snaps, Grid & Drafting Toggles
   ;; -------------------------------------------------------------------------
-  ("OSMODE"             2215       "Snaps"       "Standard 2D snap suite (End, Mid, Cen, Int, Perp, Ext)")
+  ("OSMODE"             15871      "Snaps"       "All snaps enabled except Nearest (End, Mid, Cen, Node, Quad, Int, Ins, Perp, Tan, GCen, App, Ext, Par)")
   ("OSOPTIONS"          7          "Snaps"       "Suppress OSNAP on hatches and underlays for speed")
   ("GRIDMODE"           1          "Snaps"       "Background drafting grid display ON")
   ("SNAPMODE"           0          "Snaps"       "Snap to grid cursor lock OFF")

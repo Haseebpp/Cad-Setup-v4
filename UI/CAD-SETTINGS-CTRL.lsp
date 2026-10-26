@@ -251,10 +251,11 @@
 
     ;; OSMODE mapping
     (cond
-      ((= orig-osm 0)    (set_tile "pop_osm" "0"))
-      ((= orig-osm 439)  (set_tile "pop_osm" "2"))
-      ((= orig-osm 2735) (set_tile "pop_osm" "3"))
-      (t                 (set_tile "pop_osm" "1"))
+      ((= orig-osm 0)     (set_tile "pop_osm" "0"))
+      ((= orig-osm 439)   (set_tile "pop_osm" "2"))
+      ((= orig-osm 2735)  (set_tile "pop_osm" "3"))
+      ((= orig-osm 15871) (set_tile "pop_osm" "1"))
+      (t                  (set_tile "pop_osm" "1"))
     )
 
     ;; Toggles
@@ -343,7 +344,7 @@
     (setq osm (atoi (get_tile "pop_osm")))
     (cond
       ((= osm 0) (CadSetup:SafeSetVar "OSMODE" 0))
-      ((= osm 1) (CadSetup:SafeSetVar "OSMODE" 2215))
+      ((= osm 1) (CadSetup:SafeSetVar "OSMODE" 15871))
       ((= osm 2) (CadSetup:SafeSetVar "OSMODE" 439))
       ((= osm 3) (CadSetup:SafeSetVar "OSMODE" 2735))
     )
@@ -411,7 +412,7 @@
         orig-orth  (CadSetup:SafeGetVar "ORTHOMODE" 0)
         orig-lw    (CadSetup:SafeGetVar "LWDISPLAY" 0)
         orig-mirr  (CadSetup:SafeGetVar "MIRRTEXT" 0)
-        orig-osm   (CadSetup:SafeGetVar "OSMODE" 47))
+        orig-osm   (CadSetup:SafeGetVar "OSMODE" 15871))
 
   ;; -------------------------------------------------------------------------
   ;; 9. LOCATE AND LOAD STATIC DCL
@@ -516,7 +517,7 @@
   (start_list "pop_osm")
   (mapcar 'add_list '(
     "0. All Snaps Off (OSMODE=0)"
-    "1. Standard 2D Suite (End/Mid/Cen/Int/Perp/Ext - 2215)"
+    "1. All Snaps Except Nearest (OSMODE=15871)"
     "2. Mechanical Suite (End/Mid/Cen/Quad/Int/Perp/Tan - 439)"
     "3. Civil / Survey Suite (End/Mid/Cen/Node/Int/Perp/Near/Ext - 2735)"
   ))

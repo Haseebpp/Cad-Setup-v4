@@ -876,6 +876,328 @@
 
 
 ;;; --------------------------------------------------------------------------
+;;; 1b. GROUP ISOLATE EDIT SESSION (GIS, GUN)
+;;; --------------------------------------------------------------------------
+;; Workflow:
+;;   GIS : Validate a single non-dynamic block -> Explode (X) in place -> Isolate (IS)
+;;         the exploded objects. Edit freely (draw / copy / paste / delete).
+;;   GUN : Re-group surviving exploded objects + ANY objects created during the session
+;;         into a new block at World Origin (same as GB/G) -> Unisolate (UN).
+;; Naming on GUN:
+;;   - Standard CadSetup block -> same TYPE + HANDLE, version bumped, new MOD, same INIT (like UB).
+;;   - Non-standard block      -> brand-new GRP[$HANDLE.v01] name.
+;; Session data lives in memory per drawing (*CadSetup-GIS-Session*); it is lost on close.
+
+;; Do not reset an active session when the suite is hot-reloaded (RCS)
+(if (not (boundp '*CadSetup-GIS-Session*)) (setq *CadSetup-GIS-Session* nil))
+
+;; CadSetup:PadHandle - Upper-cases and left-pads a hex handle to 16 chars for string comparison
+(defun CadSetup:PadHandle (h)
+  (setq h (strcase h))
+  (while (< (strlen h) 16) (setq h (strcat "0" h)))
+  h
+)
+
+;; CadSetup:HandleGreaterP - T if hex handle h1 was created after hex handle h2
+(defun CadSetup:HandleGreaterP (h1 h2)
+  (> (CadSetup:PadHandle h1) (CadSetup:PadHandle h2))
+)
+
+;; CadSetup:GetCurrentSpaceName - Returns the DXF 410 value of the active space ("Model" or layout name)
+(defun CadSetup:GetCurrentSpaceName ()
+  (if (or (= (getvar 'tilemode) 1) (> (getvar 'cvport) 1))
+    "Model"
+    (getvar 'ctab)
+  )
+)
+
+;; CadSetup:GisValidateInsert - Returns nil if the entity can be group-isolated,
+;; otherwise a string describing why it was rejected.
+(defun CadSetup:GisValidateInsert (ent / d obj blkName blkRec layRec cols rows sx sy sz e hasEnt hasAttDef)
+  (setq d (entget ent))
+  (if (/= (cdr (assoc 0 d)) "INSERT")
+    "Selected object is not a block reference."
+    (progn
+      (setq obj     (vlax-ename->vla-object ent)
+            blkName (cdr (assoc 2 d))
+            blkRec  (tblsearch "BLOCK" blkName)
+            layRec  (tblsearch "LAYER" (cdr (assoc 8 d)))
+            cols    (cdr (assoc 70 d))
+            rows    (cdr (assoc 71 d))
+            sx      (cond ((cdr (assoc 41 d))) (1.0))
+            sy      (cond ((cdr (assoc 42 d))) (1.0))
+            sz      (cond ((cdr (assoc 43 d))) (1.0)))
+      ;; Scan definition for content and constant/hidden attribute definitions
+      (if blkRec
+        (progn
+          (setq e (cdr (assoc -2 blkRec)))
+          (while e
+            (setq hasEnt T)
+            (if (= (cdr (assoc 0 (entget e))) "ATTDEF") (setq hasAttDef T))
+            (setq e (entnext e))
+          )
+        )
+      )
+      (cond
+        ((or (and blkRec (= (logand (cdr (assoc 70 blkRec)) 4) 4))
+             (and (vlax-property-available-p obj 'IsXref)
+                  (= (vla-get-IsXref obj) :vlax-true)))
+         "Selected block is an External Reference (Xref).")
+        ((and (vlax-property-available-p obj 'IsDynamicBlock)
+              (= (vla-get-IsDynamicBlock obj) :vlax-true))
+         "Selected block is a Dynamic Block. GIS works on static blocks only.")
+        ((or (and cols (> cols 1)) (and rows (> rows 1)))
+         "Selected block is a MINSERT (array block) and cannot be exploded.")
+        ((or (= (cdr (assoc 66 d)) 1) hasAttDef)
+         "Selected block contains attributes (exploding would turn values back into tags).")
+        ((not (and (equal sx sy 1e-8) (equal sx sz 1e-8) (> sx 0.0)))
+         "Selected block is non-uniformly scaled or mirrored (explode could distort geometry).")
+        ((and layRec (= (logand (cdr (assoc 70 layRec)) 4) 4))
+         (strcat "Selected block is on locked layer \"" (cdr (assoc 8 d)) "\"."))
+        ((not hasEnt)
+         "Selected block definition is empty.")
+        (T nil)
+      )
+    )
+  )
+)
+
+;; CadSetup:ExecuteGis - Core execution of Group Isolate on a single validated block entity
+(defun CadSetup:ExecuteGis (ent / *error* oldCmd reason d obj res expEnts marker ssIso h)
+  (defun *error* (msg)
+    (if oldCmd (setvar 'cmdecho oldCmd))
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[GIS] Error: " msg))
+    )
+    (princ)
+  )
+
+  (setq oldCmd (getvar 'cmdecho))
+  (setvar 'cmdecho 0)
+
+  (cond
+    (*CadSetup-GIS-Session*
+     (princ (strcat "\n[WARN] [GIS] A group-isolate session is already active for \""
+                    (cdr (assoc 'NAME *CadSetup-GIS-Session*))
+                    "\". Run GUN (or UN) to finish it first."))
+    )
+    ((not ent)
+     (princ "\n[GIS] No block selected.")
+    )
+    ((setq reason (CadSetup:GisValidateInsert ent))
+     (princ (strcat "\n[GIS] " reason))
+    )
+    (T
+     (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
+
+     (setq d   (entget ent)
+           obj (vlax-ename->vla-object ent)
+           res (vl-catch-all-apply 'vla-Explode (list obj)))
+
+     (if (or (vl-catch-all-error-p res)
+             (vl-catch-all-error-p
+               (setq expEnts (vl-catch-all-apply
+                               '(lambda (v) (mapcar 'vlax-vla-object->ename
+                                                    (vlax-safearray->list (vlax-variant-value v))))
+                               (list res))))
+             (null expEnts))
+       (progn
+         (princ (strcat "\n[GIS] Error: Failed to explode block"
+                        (if (vl-catch-all-error-p res) (strcat ": " (vl-catch-all-error-message res)) ".")))
+         (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+       )
+       (progn
+         ;; Highest handle among exploded objects = marker for objects created later
+         (setq marker "0" ssIso (ssadd))
+         (foreach e expEnts
+           (ssadd e ssIso)
+           (setq h (cdr (assoc 5 (entget e))))
+           (if (CadSetup:HandleGreaterP h marker) (setq marker h))
+         )
+
+         ;; Remove the original block reference (vla-Explode keeps the source)
+         (vla-Delete obj)
+
+         (setq *CadSetup-GIS-Session*
+                (list (cons 'NAME   (cdr (assoc 2 d)))
+                      (cons 'LAYER  (cdr (assoc 8 d)))
+                      (cons 'SPACE  (cond ((cdr (assoc 410 d))) ((CadSetup:GetCurrentSpaceName))))
+                      (cons 'ENTS   expEnts)
+                      (cons 'MARKER marker)))
+
+         (command "_.ISOLATEOBJECTS" ssIso "")
+
+         (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+         (princ (strcat "\n[IS/GIS] Exploded and isolated \"" (cdr (assoc 2 d)) "\" ("
+                        (itoa (length expEnts)) " object(s)). Edit, then run UN (or GUN) to regroup."))
+       )
+     )
+    )
+  )
+
+  (setvar 'cmdecho oldCmd)
+  (princ)
+)
+
+;; GIS : Group Isolate - Explode a single static block in place and isolate its contents for editing
+(defun c:GIS (/ oldCmd ss ent)
+  (setq oldCmd (getvar 'cmdecho))
+  (setvar 'cmdecho 0)
+
+  (if *CadSetup-GIS-Session*
+    (princ (strcat "\n[WARN] [GIS] A group-isolate session is already active for \""
+                   (cdr (assoc 'NAME *CadSetup-GIS-Session*))
+                   "\". Run GUN (or UN) to finish it first."))
+    (progn
+      ;; 1. Resolve a single selected object (pre-selection or pick)
+      (setq ss (ssget "_I"))
+      (cond
+        ((and ss (> (sslength ss) 1))
+         (princ (strcat "\n[GIS] Select a single block only (" (itoa (sslength ss)) " objects selected)."))
+        )
+        (ss (setq ent (ssname ss 0)))
+        (T
+         (setvar 'cmdecho oldCmd)
+         (setq ent (car (entsel "\nSelect a single block to group-isolate [GIS]: ")))
+         (setvar 'cmdecho 0)
+         (if (not ent) (princ "\n[GIS] No block selected."))
+        )
+      )
+      (sssetfirst nil nil)
+
+      ;; 2. Run GIS core
+      (if ent (CadSetup:ExecuteGis ent))
+    )
+  )
+
+  (setvar 'cmdecho oldCmd)
+  (princ)
+)
+
+;; GUN : Group Unisolate - Regroup the GIS session objects into a block at World Origin and unisolate
+(defun c:GUN (/ *error* oldCmd oldAtt sess space marker ss all i e d parsed newVer newMod newName newEnt layName)
+  (defun *error* (msg)
+    (if oldAtt (setvar 'attreq oldAtt))
+    (if oldCmd (setvar 'cmdecho oldCmd))
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[GUN] Error: " msg))
+    )
+    (princ)
+  )
+
+  (setq oldCmd (getvar 'cmdecho)
+        oldAtt (getvar 'attreq)
+        sess   *CadSetup-GIS-Session*)
+  (setvar 'cmdecho 0)
+  (setvar 'attreq 0)
+
+  (cond
+    ;; No session: behave like plain UN
+    ((null sess)
+     (princ "\n[Notice] [GUN] No active group-isolate session. Running UNISOLATEOBJECTS.")
+     (command "_.UNISOLATEOBJECTS")
+    )
+
+    ;; Session belongs to a different space
+    ((/= (strcase (setq space (cdr (assoc 'SPACE sess)))) (strcase (CadSetup:GetCurrentSpaceName)))
+     (princ (strcat "\n[WARN] [GUN] The active session was started in \"" space
+                    "\". Switch to that space and run GUN again."))
+    )
+
+    (T
+     ;; 1. Collect surviving exploded objects
+     (setq marker (cdr (assoc 'MARKER sess))
+           ss     (ssadd))
+     (foreach e (cdr (assoc 'ENTS sess))
+       (if (entget e) (ssadd e ss))
+     )
+
+     ;; 2. Collect every object created after the explode in the same space
+     (if (setq all (ssget "_X" (list (cons 410 space))))
+       (repeat (setq i (sslength all))
+         (setq e (ssname all (setq i (1- i)))
+               d (entget e))
+         (if (and (/= (cdr (assoc 0 d)) "VIEWPORT")
+                  (CadSetup:HandleGreaterP (cdr (assoc 5 d)) marker))
+           (ssadd e ss)
+         )
+       )
+     )
+
+     (if (= (sslength ss) 0)
+       (progn
+         (princ "\n[WARN] [GUN] Nothing left to regroup (all session objects were deleted). Session closed.")
+         (command "_.UNISOLATEOBJECTS")
+         (setq *CadSetup-GIS-Session* nil)
+       )
+       (progn
+         (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
+
+         ;; 3. Resolve new block name (version bump for standard names, new GRP otherwise)
+         (setq newMod (CadSetup:FormatBlockTimestamp)
+               parsed (CadSetup:ParseBlockName (cdr (assoc 'NAME sess))))
+         (if parsed
+           (progn
+             (setq newVer  (1+ (cdr (assoc 'VERSION parsed)))
+                   newName (CadSetup:BuildBlockName (cdr (assoc 'TYPE parsed)) (cdr (assoc 'HANDLE parsed))
+                                                    newVer newMod (cdr (assoc 'INIT parsed))))
+             (while (tblsearch "BLOCK" newName)
+               (setq newVer  (1+ newVer)
+                     newName (CadSetup:BuildBlockName (cdr (assoc 'TYPE parsed)) (cdr (assoc 'HANDLE parsed))
+                                                      newVer newMod (cdr (assoc 'INIT parsed)))))
+           )
+           (setq newName (CadSetup:EnsureUniqueBlockName
+                           (CadSetup:BuildBlockName "GRP" (CadSetup:GetNextDbHandle) 1 newMod newMod)))
+         )
+
+         ;; 4. Define block at World Origin and re-insert in place (identical to GB)
+         (command "._-block" newName "_non" '(0.0 0.0 0.0) ss "")
+
+         (if (not (tblsearch "BLOCK" newName))
+           (progn
+             (princ (strcat "\n[GUN] Error: Failed to create block \"" newName "\". Session kept; fix and retry GUN."))
+             (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+           )
+           (progn
+             (command "._-insert" newName "_non" '(0.0 0.0 0.0) 1.0 1.0 0.0)
+             (setq newEnt (entlast))
+
+             ;; Restore the original block reference layer
+             (setq layName (cdr (assoc 'LAYER sess)))
+             (if (and newEnt layName (tblsearch "LAYER" layName))
+               (vl-catch-all-apply 'vla-put-Layer (list (vlax-ename->vla-object newEnt) layName))
+             )
+
+             (command "_.UNISOLATEOBJECTS")
+             (setq *CadSetup-GIS-Session* nil)
+
+             (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+             (princ (strcat "\n[GUN] Regrouped " (itoa (sslength ss)) " object(s):"))
+             (princ (strcat "\n     Original: \"" (cdr (assoc 'NAME sess)) "\""))
+             (princ (strcat "\n     New     : \"" newName "\""))
+             (if newEnt (sssetfirst nil (ssadd newEnt)))
+           )
+         )
+       )
+     )
+    )
+  )
+
+  (setvar 'attreq oldAtt)
+  (setvar 'cmdecho oldCmd)
+  (princ)
+)
+
+;; Command Aliases for Group Isolate / Unisolate
+(defun c:GROUPISOLATE    () (c:GIS))
+(defun c:GROUP-ISOLATE   () (c:GIS))
+(defun c:GROUPUNISOLATE  () (c:GUN))
+(defun c:GROUP-UNISOLATE () (c:GUN))
+
+
+;;; --------------------------------------------------------------------------
 ;;; 2. FAST IN-PLACE BLOCK TRANSFORMS (RB, RBH, RBV)
 ;;; --------------------------------------------------------------------------
 

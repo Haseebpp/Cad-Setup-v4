@@ -310,9 +310,62 @@
   (princ)
 ) ; SS  -> Select Similar (if objects selected) or Select Previous (if nothing selected)
 (defun c:QSL () (initcommandversion) (command "_.QSELECT")          (princ)) ; QSL -> Quick Select filter dialog (renamed from QS to prevent overwrite)
-(defun c:IS  () (initcommandversion) (command "_.ISOLATEOBJECTS")   (princ)) ; IS  -> Isolate selected entities (hide all others)
+;; IS -> Smart Isolate:
+;;       If a single static block/group is selected, executes GIS (explode in place & isolate session).
+;;       Otherwise, runs native ISOLATEOBJECTS on the selected objects.
+(defun c:IS ( / ss ent )
+  (initcommandversion)
+  (setq ss (ssget "_I"))
+  (if (not ss)
+    (progn
+      (princ "\nSelect objects to isolate [IS]: ")
+      (setq ss (ssget))
+    )
+  )
+  (cond
+    ;; No objects selected / Esc
+    ((null ss)
+     (princ)
+    )
+
+    ;; Exactly 1 object selected: check if it qualifies for Group Isolate (GIS)
+    ((and (= (sslength ss) 1)
+          (not (and (boundp '*CadSetup-GIS-Session*) *CadSetup-GIS-Session*))
+          (setq ent (ssname ss 0))
+          (= (cdr (assoc 0 (entget ent))) "INSERT")
+          (boundp 'CadSetup:GisValidateInsert)
+          (null (CadSetup:GisValidateInsert ent))
+          (boundp 'CadSetup:ExecuteGis))
+     (sssetfirst nil nil)
+     (CadSetup:ExecuteGis ent)
+    )
+
+    ;; Multiple objects, non-block, dynamic block, or GIS session already running
+    (T
+     (if (ssget "_I")
+       (command "_.ISOLATEOBJECTS")
+       (command "_.ISOLATEOBJECTS" ss "")
+     )
+    )
+  )
+  (princ)
+)
+
 (defun c:HO  () (initcommandversion) (command "_.HIDEOBJECTS")      (princ)) ; HO  -> Hide selected entities
-(defun c:UN  () (initcommandversion) (command "_.UNISOLATEOBJECTS") (princ)) ; UN  -> Restore all hidden/isolated entities
+
+;; UN -> Smart Unisolate:
+;;       If an active GIS session exists, executes GUN (regroup & unisolate).
+;;       Otherwise, runs native UNISOLATEOBJECTS.
+(defun c:UN ()
+  (initcommandversion)
+  (if (and (boundp '*CadSetup-GIS-Session*) *CadSetup-GIS-Session* (boundp 'c:GUN))
+    (c:GUN)
+    (progn
+      (command "_.UNISOLATEOBJECTS")
+      (princ)
+    )
+  )
+)
 
 ;;; --- LAYER TOOLS ----------------------------------------------------------
 (defun c:Q   () (initcommandversion) (command "_.MATCHPROP")   (princ)) ; Q   -> Painter tool: Match source properties

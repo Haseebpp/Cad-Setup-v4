@@ -286,7 +286,7 @@ Cad-Setup-v4/
 │   ├── 00_System-Variables.lsp # System variable restoration (APPLY-SYSVARS, RSV)
 │   ├── 01_Workflow-Keys.lsp    # Numbered rapid drafting keys (0, 1, 2, 3, 4, 5...)
 │   ├── 02_Layers.lsp           # Layer loading & legend generator (RL, DCL, L0, BLL)
-│   ├── 03_Blocks.lsp           # Auto block creator, unique block (UB) & transforms (GB, DB, DSL, UB, RB)
+│   ├── 03_Blocks.lsp           # Auto block creator, unique block (UB), group isolate (GIS/GUN) & transforms (GB, DB, DSL, UB, GIS, GUN, RB)
 │   ├── 04_Layout-Views.lsp     # Layout & presentation tools (TS, VR, A3SERIES)
 │   ├── 05_Selection-Filters.lsp# Instant entity filters (SR, SL, ST, SB, SX, SHT/SH, SP, SLN, SCIR, SV, STB, SW, SA)
 │   ├── 06_Utilities.lsp        # Geometry utilities (TC, BBOX, FL0, PUA, LST)

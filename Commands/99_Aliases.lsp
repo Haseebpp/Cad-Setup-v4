@@ -50,7 +50,9 @@
 (defun c:MP  () (initcommandversion) (command "_.MOVE" "_P" "")(princ)); VP  -> Move previously selected set
 (defun c:C   () (initcommandversion) (command "_.COPY")       (princ)) ; C   -> Copy objects
 (defun c:CP  () (initcommandversion) (command "_.COPY" "_P" "")(princ)); CP  -> Copy previously selected set
-(defun c:CS  () (c:COPYSEG))                                           ; CS  -> Copy polyline segment with live drag (COPYSEG)
+(defun c:CS     () (c:COPYSEG))                                           ; CS     -> Copy polyline segment with live drag (COPYSEG)
+(defun c:CPYSEG () (c:COPYSEG))                                           ; CPYSEG -> Copy polyline segment with live drag (COPYSEG)
+(defun c:CPY    () (c:COPYSEG))                                           ; CPY    -> Copy polyline segment with live drag (COPYSEG)
 (defun c:RR  () (initcommandversion) (command "_.ROTATE")     (princ)) ; RR  -> Rotate objects around a basepoint
 (defun c:HR  () (c:HROT))                                             ; HR  -> Rotate hatch patterns in selection (HROT)
 (defun c:SC  () (initcommandversion) (command "_.SCALE")      (princ)) ; SC  -> Scale objects uniformly

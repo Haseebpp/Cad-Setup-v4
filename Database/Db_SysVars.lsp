@@ -34,6 +34,7 @@
   ("PICKFIRST"          1          "Drafting"    "Noun/verb selection enabled (select before command)")
   ("PICKADD"            2          "Drafting"    "Accumulate selection sets without holding Shift")
   ("HIGHLIGHT"          1          "Drafting"    "Highlight selected drawing entities")
+  ("LEGACYCTRLPICK"     0          "Drafting"    "Enable Ctrl+Click subentity and segment selection")
   ("FILEDIA"            1          "Drafting"    "Force standard Windows file navigation dialogs")
   ("ATTDIA"             1          "Drafting"    "Force GUI dialog for block attribute input")
   ("MIRRTEXT"           0          "Drafting"    "Keep text legible and un-mirrored when mirroring")

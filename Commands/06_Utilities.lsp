@@ -735,8 +735,9 @@
   (CadSetup:SafeSetVar "PICKADD" 2)
   (CadSetup:SafeSetVar "PICKAUTO" 5)
   (CadSetup:SafeSetVar "HIGHLIGHT" 1)
+  (CadSetup:SafeSetVar "LEGACYCTRLPICK" 0)
   (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
-  (princ "\n[FIXSELECT] Selection environment restored (PICKFIRST=1, PICKADD=2, PICKAUTO=5, HIGHLIGHT=1).")
+  (princ "\n[FIXSELECT] Selection environment restored (PICKFIRST=1, PICKADD=2, PICKAUTO=5, HIGHLIGHT=1, LEGACYCTRLPICK=0).")
   (princ)
 )
 

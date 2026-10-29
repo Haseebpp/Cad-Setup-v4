@@ -400,7 +400,15 @@
 
 ;;; --- DIMENSIONING & ANNOTATION --------------------------------------------
 (defun c:DA  () (initcommandversion) (command "_.DIMALIGNED")  (princ)) ; DA  -> Aligned dimension (follows curve angle)
-(defun c:DD  () (initcommandversion) (command "_.DIMLINEAR")   (princ)) ; DD  -> Orthogonal Linear dimension (Horizontal/Vertical)
+(defun c:DD ()
+  (initcommandversion)
+  (if (ssget "_I")
+    (command "_.QDIM")
+    (command "_.DIMLINEAR")
+  )
+  (princ)
+) ; DD  -> Smart Dim: QDIM (if objects selected) or DIMLINEAR (if nothing selected)
+(defun c:DQ  () (initcommandversion) (command "_.QDIM")        (princ)) ; DQ  -> Quick Dimension (QDIM)
 (defun c:DR  () (initcommandversion) (command "_.DIMRADIUS")   (princ)) ; DR  -> Radial dimension for arcs and circles
 (defun c:DDI () (initcommandversion) (command "_.DIMDIAMETER") (princ)) ; DDI -> Diameter dimension for circles
 (defun c:DAN () (initcommandversion) (command "_.DIMANGULAR")  (princ)) ; DAN -> Angular dimension between two vectors

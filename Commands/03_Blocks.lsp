@@ -1274,7 +1274,7 @@
 ;;        acquires target block (pre-selected or interactive pick), and opens
 ;;        -REFEDIT with all objects checked out and attribute dialog suppressed.
 
-(defun c:RA ( / *error* GetGeomPt GetBlkName ss ent hnd bname pt sel target oldexp oldos oldcmdecho)
+(defun c:RA ( / *error* GetGeomPt GetBlkName IsXref wasInRefedit ss ent hnd bname pt sel target oldexp oldos oldcmdecho)
   (vl-load-com)
 
   ;; Error handler to cleanly restore system variables if cancelled
@@ -1286,6 +1286,20 @@
       (princ (strcat "\nError: " msg))
     )
     (princ)
+  )
+
+  ;; Helper: Check if entity is an Xref
+  (defun IsXref (e / el blkName blkRec)
+    (if (and e (setq el (entget e)) (= (cdr (assoc 0 el)) "INSERT"))
+      (progn
+        (setq blkName (cdr (assoc 2 el)))
+        (if (setq blkRec (tblsearch "BLOCK" blkName))
+          (/= 0 (logand 4 (cdr (assoc 70 blkRec))))
+          nil
+        )
+      )
+      nil
+    )
   )
 
   ;; Helper: Get the true (effective) block name
@@ -1378,10 +1392,11 @@
   )
 
   ;; -------------------------------------------------------------------------
-  ;; 2. Close active Refedit (if open) and Refedit the new target
+  ;; 2. Close active Refedit (if open) and route to BEDIT or REFEDIT
   ;; -------------------------------------------------------------------------
   (if (or hnd pt)
     (progn
+      (setq wasInRefedit (/= (getvar "REFEDITNAME") ""))
       (setq oldcmdecho (getvar "CMDECHO")
             oldexp     (getvar "EXPERT")
             oldos      (getvar "OSMODE")
@@ -1393,7 +1408,7 @@
       (sssetfirst nil nil)
 
       ;; If currently inside a REFEDIT session, save and exit silently
-      (if (/= (getvar "REFEDITNAME") "")
+      (if wasInRefedit
         (progn
           (command "_.refclose" "_S")
           (while (> (getvar "CMDACTIVE") 0) (command "_Y"))
@@ -1401,47 +1416,66 @@
       )
 
       ;; ---------------------------------------------------------------------
-      ;; 3. Open the target block in -REFEDIT
+      ;; 3. Open target block:
+      ;;    If double-clicked/selected inside Refedit: Open in Block Editor (BEDIT)
+      ;;    Otherwise (outside Refedit, or target is Xref): Open in -REFEDIT
       ;; ---------------------------------------------------------------------
-      ;; Ensure AutoCAD locks objects not in working set via profile registry
-      (vl-registry-write
-        (strcat "HKEY_CURRENT_USER\\" (vlax-product-key) "\\Profiles\\" (getvar "CPROFILE") "\\Dialogs\\RefeditDialog")
-        "LockObjects"
-        "1"
-      )
-      ;; Ensure background objects visibly dim/fade (default to 50% if turned off)
-      (if (and (getvar "XFADECTL") (= (getvar "XFADECTL") 0))
-        (setvar "XFADECTL" 50)
-      )
-
-      (cond
-        ;; BRANCH A: Target was an external top-level block (Handle still exists)
-        ((and hnd (setq target (handent hnd)) (entget target))
-         (sssetfirst nil (ssadd target))
-         (command "_.-refedit" "_O" "_A" "_N")
+      (if (and wasInRefedit (not (IsXref ent)))
+        (progn
+          ;; Double-clicked / selected a block while inside REFEDIT:
+          ;; Open in Block Editor (BEDIT) instead of nested Refedit
+          (setvar "OSMODE" oldos)
+          (setvar "EXPERT" oldexp)
+          (setvar "CMDECHO" oldcmdecho)
+          (setvar "BLOCKEDITLOCK" 0)
+          (if (and bname (/= bname ""))
+            (progn
+              (princ (strcat "\n[RA] Inside Refedit: Opening '" bname "' in Block Editor..."))
+              (command "._BEDIT" bname)
+            )
+            (command "._BEDIT")
+          )
         )
+        (progn
+          ;; Ensure AutoCAD locks objects not in working set via profile registry
+          (vl-registry-write
+            (strcat "HKEY_CURRENT_USER\\" (vlax-product-key) "\\Profiles\\" (getvar "CPROFILE") "\\Dialogs\\RefeditDialog")
+            "LockObjects"
+            "1"
+          )
+          ;; Ensure background objects visibly dim/fade (default to 50% if turned off)
+          (if (and (getvar "XFADECTL") (= (getvar "XFADECTL") 0))
+            (setvar "XFADECTL" 50)
+          )
 
-        ;; BRANCH B: Target was nested inside the previous Refedit session.
-        ;; Its temporary handle is gone because REFCLOSE merged it back into the parent.
-        ;; Pick it by coordinate and step deeper using "_Next".
-        (pt
-         (setvar "OSMODE" 0) ; Disable Osnaps so point selection is exact
-         
-         ;; Start -REFEDIT at the nested block's geometry coordinate,
-         ;; step down with "_Next" to bypass the parent level, and accept:
-         (command "_.-refedit" pt "_Next" "_O" "_A" "_N")
-         
-         ;; Safety fallback: If the command is still active, clean up prompts
-         (while (> (getvar "CMDACTIVE") 0)
-           (command "")
-         )
+          (cond
+            ;; BRANCH A: Target was an external top-level block (Handle still exists)
+            ((and hnd (setq target (handent hnd)) (entget target))
+             (sssetfirst nil (ssadd target))
+             (command "_.-refedit" "_O" "_A" "_N")
+            )
+
+            ;; BRANCH B: Target was nested inside previous Refedit session
+            (pt
+             (setvar "OSMODE" 0) ; Disable Osnaps so point selection is exact
+             
+             ;; Start -REFEDIT at the nested block's geometry coordinate,
+             ;; step down with "_Next" to bypass the parent level, and accept:
+             (command "_.-refedit" pt "_Next" "_O" "_A" "_N")
+             
+             ;; Safety fallback: If the command is still active, clean up prompts
+             (while (> (getvar "CMDACTIVE") 0)
+               (command "")
+             )
+            )
+          )
+
+          ;; Restore system variables
+          (setvar "OSMODE" oldos)
+          (setvar "EXPERT" oldexp)
+          (setvar "CMDECHO" oldcmdecho)
         )
       )
-
-      ;; Restore system variables
-      (setvar "OSMODE" oldos)
-      (setvar "EXPERT" oldexp)
-      (setvar "CMDECHO" oldcmdecho)
     )
   )
   (princ)

@@ -1274,75 +1274,174 @@
 ;;        acquires target block (pre-selected or interactive pick), and opens
 ;;        -REFEDIT with all objects checked out and attribute dialog suppressed.
 
-(defun c:RA ( / *error* ss ent hnd pt sel target oldexp minpt maxpt)
+(defun c:RA ( / *error* GetGeomPt GetBlkName ss ent hnd bname pt sel target oldexp oldos oldcmdecho)
   (vl-load-com)
 
+  ;; Error handler to cleanly restore system variables if cancelled
   (defun *error* (msg)
-    (if (and oldexp (getvar "EXPERT")) (setvar "EXPERT" oldexp))
-    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
-      (princ (strcat "\n[RA] Error: " msg))
+    (if oldos (setvar "OSMODE" oldos))
+    (if oldexp (setvar "EXPERT" oldexp))
+    (if oldcmdecho (setvar "CMDECHO" oldcmdecho))
+    (if (and msg (not (wcmatch (strcase msg) "*BREAK*,*CANCEL*,*EXIT*")))
+      (princ (strcat "\nError: " msg))
     )
     (princ)
   )
 
+  ;; Helper: Get the true (effective) block name
+  (defun GetBlkName (e / obj)
+    (setq obj (vlax-ename->vla-object e))
+    (if (vlax-property-available-p obj 'EffectiveName)
+      (vla-get-EffectiveName obj)
+      (vla-get-Name obj)
+    )
+  )
+
+  ;; Helper: Find a real point on the nested block's visible geometry
+  ;; so -REFEDIT can hit it accurately after REFCLOSE merges it back.
+  (defun GetGeomPt (insEnt / insData bName b0 dxf10 dxf210 dxf41 dxf42 dxf43 dxf50
+                            blkDef subEnt subObj minPt maxPt ptLocal
+                            c s x1 y1 z1 vx vy vz pWCS)
+    (setq insData (entget insEnt)
+          bName   (cdr (assoc 2 insData))
+          dxf10   (cdr (assoc 10 insData))
+          dxf210  (cdr (assoc 210 insData))
+          dxf41   (cdr (assoc 41 insData))
+          dxf42   (cdr (assoc 42 insData))
+          dxf43   (cdr (assoc 43 insData))
+          dxf50   (cdr (assoc 50 insData))
+          blkDef  (tblobjname "BLOCK" bName)
+          b0      (cdr (assoc 10 (entget blkDef)))
+          subEnt  (entnext blkDef)
+    )
+    ;; Loop through sub-entities inside the block definition to find a valid bounding box
+    (while (and subEnt (not ptLocal))
+      (if (and (not (member (cdr (assoc 0 (entget subEnt))) '("ATTDEF" "SEQEND")))
+               (/= (cdr (assoc 60 (entget subEnt))) 1)) ; Skip invisible geometry
+        (if (not (vl-catch-all-error-p
+                   (vl-catch-all-apply 'vla-getboundingbox
+                     (list (vlax-ename->vla-object subEnt) 'minPt 'maxPt))))
+          (setq ptLocal (vlax-safearray->list minPt))
+        )
+      )
+      (setq subEnt (entnext subEnt))
+    )
+    (if ptLocal
+      (progn
+        ;; Transform local block definition point to Modelspace UCS
+        (setq ptLocal (mapcar '- ptLocal b0)
+              x1 (* (car ptLocal) dxf41)
+              y1 (* (cadr ptLocal) dxf42)
+              z1 (* (caddr ptLocal) dxf43)
+              c  (cos dxf50)
+              s  (sin dxf50)
+              vx (- (* x1 c) (* y1 s))
+              vy (+ (* x1 s) (* y1 c))
+              vz z1
+              pWCS (trans (mapcar '+ dxf10 (list vx vy vz)) dxf210 0)
+        )
+        (trans pWCS 0 1) ; Return in current UCS
+      )
+      ;; Fallback to bounding box of the insert itself
+      (if (not (vl-catch-all-error-p
+                 (vl-catch-all-apply 'vla-getboundingbox
+                   (list (vlax-ename->vla-object insEnt) 'minPt 'maxPt))))
+        (trans (vlax-safearray->list minPt) 0 1)
+        (trans dxf10 dxf210 1)
+      )
+    )
+  )
+
+  ;; -------------------------------------------------------------------------
   ;; 1. Acquire target block/Xref (Pre-selected or Prompted)
+  ;; -------------------------------------------------------------------------
   (cond
-    ;; Check if a block is already selected (Pickfirst / Double-click)
+    ;; Case 1: Block was pre-selected (or double-clicked) before running RA
     ((setq ss (ssget "_I" '((0 . "INSERT"))))
-     (setq ent (ssname ss 0))
-     (setq hnd (cdr (assoc 5 (entget ent))))
-     ;; Grab a valid point on the block using its bounding box
-     (if (not (vl-catch-all-error-p (vl-catch-all-apply 'vla-getboundingbox (list (vlax-ename->vla-object ent) 'minpt 'maxpt))))
-       (setq pt (vlax-safearray->list minpt))
-       (setq pt (cdr (assoc 10 (entget ent))))
+     (setq ent   (ssname ss 0)
+           hnd   (cdr (assoc 5 (entget ent)))
+           bname (GetBlkName ent)
+           pt    (GetGeomPt ent)
      )
     )
-    ;; Otherwise, prompt user to pick a block
+    ;; Case 2: Prompt user to click a block
     ((setq sel (entsel "\nSelect block or Xref to Refedit All: "))
      (if (= (cdr (assoc 0 (entget (car sel)))) "INSERT")
-       (progn
-         (setq ent (car sel))
-         (setq hnd (cdr (assoc 5 (entget ent))))
-         (setq pt  (cadr sel))
+       (setq ent   (car sel)
+             hnd   (cdr (assoc 5 (entget ent)))
+             bname (GetBlkName ent)
+             pt    (cadr sel) ; Exact click point on the geometry
        )
        (princ "\nSelected object is not a block or Xref.")
      )
     )
   )
 
-  ;; 2. Close active Refedit (if any) and open the new target block
+  ;; -------------------------------------------------------------------------
+  ;; 2. Close active Refedit (if open) and Refedit the new target
+  ;; -------------------------------------------------------------------------
   (if (or hnd pt)
     (progn
-      ;; Clear active selection so REFCLOSE doesn't get confused
+      (setq oldcmdecho (getvar "CMDECHO")
+            oldexp     (getvar "EXPERT")
+            oldos      (getvar "OSMODE")
+      )
+      (setvar "CMDECHO" 0)
+      (setvar "EXPERT" 5)
+
+      ;; Clear selection set so REFCLOSE doesn't get blocked
       (sssetfirst nil nil)
 
-      ;; If already inside a REFEDIT session, save and exit silently
+      ;; If currently inside a REFEDIT session, save and exit silently
       (if (/= (getvar "REFEDITNAME") "")
         (progn
-          (setq oldexp (getvar "EXPERT"))
-          (setvar "EXPERT" 5) ; Suppress confirmation popups
-          
-          ;; Use _.refclose (no hyphen), "_S" to Save, and confirm if prompted
           (command "_.refclose" "_S")
           (while (> (getvar "CMDACTIVE") 0) (command "_Y"))
-          
-          (setvar "EXPERT" oldexp)
-          (setq oldexp nil)
         )
       )
 
-      ;; 3. Re-select the target block and launch -REFEDIT
+      ;; ---------------------------------------------------------------------
+      ;; 3. Open the target block in -REFEDIT
+      ;; ---------------------------------------------------------------------
+      ;; Ensure AutoCAD locks objects not in working set via profile registry
+      (vl-registry-write
+        (strcat "HKEY_CURRENT_USER\\" (vlax-product-key) "\\Profiles\\" (getvar "CPROFILE") "\\Dialogs\\RefeditDialog")
+        "LockObjects"
+        "1"
+      )
+      ;; Ensure background objects visibly dim/fade (default to 50% if turned off)
+      (if (and (getvar "XFADECTL") (= (getvar "XFADECTL") 0))
+        (setvar "XFADECTL" 50)
+      )
+
       (cond
-        ;; Case A: External block whose entity handle survived REFCLOSE
+        ;; BRANCH A: Target was an external top-level block (Handle still exists)
         ((and hnd (setq target (handent hnd)) (entget target))
          (sssetfirst nil (ssadd target))
          (command "_.-refedit" "_O" "_A" "_N")
         )
-        ;; Case B: Nested block whose handle regenerated during REFCLOSE
+
+        ;; BRANCH B: Target was nested inside the previous Refedit session.
+        ;; Its temporary handle is gone because REFCLOSE merged it back into the parent.
+        ;; Pick it by coordinate and step deeper using "_Next".
         (pt
-         (command "_.-refedit" "_non" pt "_O" "_A" "_N")
+         (setvar "OSMODE" 0) ; Disable Osnaps so point selection is exact
+         
+         ;; Start -REFEDIT at the nested block's geometry coordinate,
+         ;; step down with "_Next" to bypass the parent level, and accept:
+         (command "_.-refedit" pt "_Next" "_O" "_A" "_N")
+         
+         ;; Safety fallback: If the command is still active, clean up prompts
+         (while (> (getvar "CMDACTIVE") 0)
+           (command "")
+         )
         )
       )
+
+      ;; Restore system variables
+      (setvar "OSMODE" oldos)
+      (setvar "EXPERT" oldexp)
+      (setvar "CMDECHO" oldcmdecho)
     )
   )
   (princ)

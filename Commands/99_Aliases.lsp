@@ -389,7 +389,6 @@
 (defun c:B   () (initcommandversion) (initdia) (command "_.BLOCK") (princ)) ; B   -> Open Block Definition creation dialog
 (defun c:I   () (initcommandversion) (command "_.INSERT") (princ)) ; I   -> Launch Modern Block Insertion palette
 (defun c:G   () (c:GB))                                                ; G   -> Group Block at Origin (GB)
-(defun c:RA  () (c:REFEDITALL))                                        ; RA  -> In-place Refedit All objects in target Block/Xref (REFEDITALL)
 
 ;;; --- ZOOM & VIEW SHORTCUTS ------------------------------------------------
 (defun c:ZE  () (initcommandversion) (command "_.ZOOM" "_E")   (princ)) ; ZE  -> Zoom Extents (fits all geometry to screen)

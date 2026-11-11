@@ -39,7 +39,6 @@
 (defun c:A   () (initcommandversion) (command "_.ARC")       (princ)) ; A   -> Draw 3-Point Arc
 (defun c:H   () (initcommandversion) (command "_.HATCH") (princ)) ; H   -> Open Hatch Ribbon / Fill boundaries
 (defun c:WI  () (initcommandversion) (command "_.WIPEOUT")   (princ)) ; WI  -> Create polygonal mask/wipeout
-(defun c:WP  () (initcommandversion) (command "_.WIPEOUT")   (princ)) ; WP  -> Create polygonal mask/wipeout
 (defun c:BO  () (initcommandversion) (command "_.BOUNDARY")  (princ)) ; BO  -> Create region/polyline boundary
 
 ;;; --- MEASURE & INQUIRE ----------------------------------------------------

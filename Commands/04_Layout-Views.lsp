@@ -2,6 +2,7 @@
 ;;; 04_Layout-Views.lsp - Zoom, Views, Annotation Shortcuts & Layout Presentation
 ;;; Layer: Commands (Priority 04)
 ;;; Author   : Haseeb
+;;; Commands : TS, A3SERIES, VPCLIPRECTANGLE (VR), ZOOMANNO (ZA, ZANNO)
 ;;; ==========================================================================
 
 (vl-load-com)
@@ -401,6 +402,131 @@
 ;; Alias: VR -> VPCLIPRECTANGLE
 (defun c:VR ()
   (c:VPCLIPRECTANGLE)
+)
+
+
+;;; --------------------------------------------------------------------------
+;;; 4. ZOOM ANNOTATIVE SCALE ENGINE (ZOOMANNO / ZA / ZANNO)
+;;; --------------------------------------------------------------------------
+
+;; ZOOMANNO : Automatically calculate and set annotative scale based on zoomed view
+;; Supports Model Space (A3 sheet calibration) and Layout Viewports (exact custom scale)
+;; Keyword options: [Current/Window/Object] <Current>
+(defun c:ZOOMANNO ( / *error* doc oldCmdecho opt pt1 pt2 ss rawRatio intRatio
+                      scaleName oldScale wasCreated actVP isLocked )
+
+  (defun *error* (msg)
+    (if oldCmdecho (setvar 'cmdecho oldCmdecho))
+    (if (boundp 'CadSetup:UndoReset)
+      (CadSetup:UndoReset)
+      (if doc (vla-endundomark doc))
+    )
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[ZOOMANNO] Error: " msg))
+    )
+    (princ)
+  )
+
+  ;; Guard: Reject pure Paper Space execution (cvport = 1)
+  (if (and (= (getvar "TILEMODE") 0) (= (getvar "CVPORT") 1))
+    (progn
+      (princ "\n[ZOOMANNO] Command requires Model Space or an active floating Viewport.")
+      (princ)
+    )
+    (progn
+      (setq oldCmdecho (getvar 'cmdecho))
+      (setvar 'cmdecho 0)
+
+      (setq doc (if (boundp 'CadSetup:GetDoc)
+                  (CadSetup:GetDoc)
+                  (vla-get-activedocument (vlax-get-acad-object))))
+      (if (boundp 'CadSetup:UndoStart)
+        (CadSetup:UndoStart)
+        (if doc (vla-startundomark doc))
+      )
+
+      ;; Check if active layout viewport is locked (if in layout)
+      (if (and (= (getvar "TILEMODE") 0) (> (getvar "CVPORT") 1))
+        (progn
+          (setq actVP (CadSetup:GetActiveViewportObject))
+          (if (and actVP
+                   (= (vl-catch-all-apply 'vla-get-displaylocked (list actVP)) :vlax-true))
+            (setq isLocked T)
+          )
+        )
+      )
+
+      ;; Prompt for option: [Current/Window/Object] <Current>
+      (initget "Current Window Object")
+      (setq opt (getkword "\n[ZOOMANNO] Set annotative scale from zoom [Current/Window/Object] <Current>: "))
+      (if (or (null opt) (= opt "")) (setq opt "Current"))
+
+      (cond
+        ((= opt "Window")
+         (if isLocked
+           (princ "\n[ZOOMANNO] Notice: Active viewport is locked; using current zoom dimensions.")
+           (progn
+             (setq pt1 (getpoint "\nSpecify first corner of zoom window: "))
+             (if pt1
+               (progn
+                 (setq pt2 (getcorner pt1 "\nSpecify opposite corner: "))
+                 (if pt2
+                   (command "_.zoom" "_w" "_non" pt1 "_non" pt2)
+                 )
+               )
+             )
+           )
+         )
+        )
+        ((= opt "Object")
+         (if isLocked
+           (princ "\n[ZOOMANNO] Notice: Active viewport is locked; using current zoom dimensions.")
+           (progn
+             (princ "\nSelect object(s) to zoom and scale to: ")
+             (setq ss (ssget))
+             (if ss
+               (command "_.zoom" "_o" ss "")
+             )
+           )
+         )
+        )
+        (t nil) ; "Current" - keep view as is
+      )
+
+      ;; Calculate zoom scale ratio
+      (setq rawRatio (CadSetup:CalculateZoomScaleRatio))
+      (if rawRatio
+        (progn
+          (setq intRatio   (CadSetup:CalculateZoomScaleInteger rawRatio)
+                scaleName  (strcat "1:" (itoa intRatio))
+                oldScale   (getvar "CANNOSCALE")
+                wasCreated (CadSetup:EnsureAnnoScale scaleName 1 intRatio))
+
+          (CadSetup:SetAnnoScale scaleName)
+
+          (princ (strcat "\n[ZOOMANNO] Active scale set: " oldScale " -> " scaleName
+                         (if wasCreated " (new scale created)" " (existing scale)") "."))
+        )
+        (princ "\n[ZOOMANNO] Could not derive scale ratio from active view.")
+      )
+
+      (if (boundp 'CadSetup:UndoEnd)
+        (CadSetup:UndoEnd)
+        (if doc (vla-endundomark doc))
+      )
+      (setvar 'cmdecho oldCmdecho)
+      (princ)
+    )
+  )
+)
+
+;; Aliases within 04_Layout-Views.lsp: ZA and ZANNO -> ZOOMANNO
+(defun c:ZA ()
+  (c:ZOOMANNO)
+)
+
+(defun c:ZANNO ()
+  (c:ZOOMANNO)
 )
 
 (if *CadSetup-Debug*

@@ -1,4 +1,4 @@
-;;; ==========================================================================
+  ;;; ==========================================================================
 ;;; 03_Blocks.lsp - Auto Block Generators & In-Place Fast Block Transforms
 ;;; Layer: Commands (Priority 03)
 ;;; Author   : Haseeb
@@ -682,127 +682,199 @@
   )
 )
 
-;; CadSetup:MakeBlockUnique - Makes a single block reference unique by creating a duplicate definition
-;; and redirecting ONLY the selected block reference to the new definition.
-;; Returns (list updatedEname originalName uniqueName) on success, nil on cancel/failure.
-(defun CadSetup:MakeBlockUnique (ent / d obj blkName isDynamic parsed curVer newVer curInit newMod
-                                       newName typeChoice handle cloneOk updatedEnt)
-  (if (and ent (setq d (entget ent)) (= (cdr (assoc 0 d)) "INSERT"))
+;; CadSetup:MakeBlockUnique - Makes block reference(s) unique by creating duplicate definition(s)
+;; and redirecting selected block references to the new definition.
+;; If multiple references of the same block definition are selected, all of them receive the SAME updated name.
+;; Accepts: an entity name (ename), a list of enames, or a selection set (pickset).
+;; Returns: (list (list updatedEnts originalName uniqueName) ...) for multiple entities/selection set,
+;;          or (list updatedEnt originalName uniqueName) for single entity name input.
+(defun CadSetup:MakeBlockUnique (input / isSingleInput rawList i entList seen ent d obj
+                                        blkName layRec isDynamic match blkGroups results
+                                        grp grpEnts parsed curVer newVer curInit newMod
+                                        newName typeChoice handle cloneOk updatedList updatedEnt)
+  (cond
+    ((= (type input) 'ENAME)
+     (setq isSingleInput T
+           rawList (list input)))
+    ((= (type input) 'PICKSET)
+     (setq isSingleInput nil
+           rawList nil
+           i 0)
+     (while (< i (sslength input))
+       (setq rawList (cons (ssname input i) rawList)
+             i (1+ i)))
+     (setq rawList (reverse rawList)))
+    ((= (type input) 'LIST)
+     (setq isSingleInput nil
+           rawList input))
+    (T
+     (setq isSingleInput nil
+           rawList nil))
+  )
+
+  (if rawList
     (progn
-      (setq obj (vl-catch-all-apply 'vlax-ename->vla-object (list ent)))
-      (if (and (not (vl-catch-all-error-p obj)) obj)
-        (progn
-          ;; Retrieve effective block definition name (resolves dynamic block anonymous *U names)
-          (setq blkName
-            (if (vlax-property-available-p obj 'EffectiveName)
-              (vla-get-EffectiveName obj)
-              (vla-get-Name obj)
-            )
-          )
-          (if (or (null blkName) (= blkName ""))
-            (setq blkName (cdr (assoc 2 d)))
-          )
-
-          ;; Guard: Do not allow making Xrefs unique
-          (if (or (and (tblsearch "BLOCK" blkName)
-                       (= (logand (cdr (assoc 70 (tblsearch "BLOCK" blkName))) 4) 4))
-                  (and (vlax-property-available-p obj 'IsXref)
-                       (= (vla-get-IsXref obj) :vlax-true)))
-            (progn
-              (princ "\n[UB] Error: Selected block reference is an External Reference (Xref) and cannot be made unique.")
-              nil
-            )
-            (progn
-              (setq isDynamic (and (vlax-property-available-p obj 'IsDynamicBlock)
-                                   (= (vla-get-IsDynamicBlock obj) :vlax-true)))
-
-              (setq parsed (CadSetup:ParseBlockName blkName))
-
-              (if parsed
-                ;; 1. Standard CadSetup block: Bump version and refresh MOD timestamp
-                (progn
-                  (setq curVer  (cdr (assoc 'VERSION parsed))
-                        newVer  (1+ curVer)
-                        curInit (cdr (assoc 'INIT parsed))
-                        newMod  (CadSetup:FormatBlockTimestamp)
-                        newName (CadSetup:BuildBlockName
-                                  (cdr (assoc 'TYPE parsed))
-                                  (cdr (assoc 'HANDLE parsed))
-                                  newVer
-                                  newMod
-                                  curInit))
-
-                  (while (tblsearch "BLOCK" newName)
-                    (setq newVer  (1+ newVer)
-                          newName (CadSetup:BuildBlockName
-                                    (cdr (assoc 'TYPE parsed))
-                                    (cdr (assoc 'HANDLE parsed))
-                                    newVer
-                                    newMod
-                                    curInit)))
-                )
-                ;; 2. Non-Standard block: Keep name with unique suffix, or convert to GRP/DYN
-                (progn
-                  (initget "Keep GRP DYN Cancel")
-                  (setq typeChoice (getkword (strcat "\nBlock \"" blkName "\" is non-standard. Make unique as [Keep name/GRP/DYN/Cancel] <Keep>: ")))
-                  (if (or (null typeChoice) (= typeChoice "")) (setq typeChoice "Keep"))
-
-                  (cond
-                    ((= typeChoice "Keep")
-                     (setq newName (CadSetup:EnsureUniqueBlockName (strcat blkName "_1"))))
-                    ((or (= typeChoice "GRP") (= typeChoice "DYN"))
-                     (setq handle  (CadSetup:GetNextDbHandle)
-                           newMod  (CadSetup:FormatBlockTimestamp)
-                           newName (CadSetup:BuildBlockName typeChoice handle 1 newMod newMod)
-                           newName (CadSetup:EnsureUniqueBlockName newName)))
-                    (T
-                     (setq newName nil))
-                  )
-                )
-              )
-
-              (if newName
-                (progn
-                  ;; Clone block definition
-                  (setq cloneOk (CadSetup:CloneBlockDefinition blkName newName isDynamic))
-                  (if cloneOk
-                    (progn
-                      ;; Reassign selected block reference only
-                      (setq updatedEnt (CadSetup:ReassignBlockReference ent newName isDynamic))
-                      (if updatedEnt
-                        (list updatedEnt blkName newName)
-                        (progn
-                          (princ "\n[UB] Error: Failed to reassign selected block reference to unique definition.")
-                          nil
-                        )
-                      )
-                    )
-                    (progn
-                      (princ (strcat "\n[UB] Error: Failed to clone block definition \"" blkName "\" to \"" newName "\"."))
-                      nil
-                    )
-                  )
-                )
-                nil ; user cancelled
-              )
-            )
-          )
-        )
-        (progn
-          (princ "\n[UB] Error: Failed to access block reference COM object.")
-          nil
+      ;; Filter unique ENAME elements
+      (setq entList nil
+            seen    nil)
+      (foreach ent rawList
+        (if (and ent (= (type ent) 'ENAME) (not (vl-position ent seen)))
+          (setq seen    (cons ent seen)
+                entList (cons ent entList))
         )
       )
+      (setq entList (reverse entList))
+
+      ;; Validate and group references by effective block definition name
+      (setq blkGroups nil)
+      (foreach ent entList
+        (setq d (entget ent))
+        (if (and d (= (cdr (assoc 0 d)) "INSERT"))
+          (progn
+            (setq obj (vl-catch-all-apply 'vlax-ename->vla-object (list ent)))
+            (if (and (not (vl-catch-all-error-p obj)) obj)
+              (progn
+                ;; Retrieve effective block definition name (resolves dynamic block anonymous *U names)
+                (setq blkName
+                  (if (vlax-property-available-p obj 'EffectiveName)
+                    (vla-get-EffectiveName obj)
+                    (vla-get-Name obj)
+                  )
+                )
+                (if (or (null blkName) (= blkName ""))
+                  (setq blkName (cdr (assoc 2 d)))
+                )
+
+                ;; Check if layer is locked
+                (setq layRec (tblsearch "LAYER" (cdr (assoc 8 d))))
+                (if (and layRec (= (logand (cdr (assoc 70 layRec)) 4) 4))
+                  (princ (strcat "\n[UB] Warning: Block reference on locked layer \"" (cdr (assoc 8 d)) "\" skipped."))
+                  ;; Check if Xref
+                  (if (or (and (tblsearch "BLOCK" blkName)
+                               (= (logand (cdr (assoc 70 (tblsearch "BLOCK" blkName))) 4) 4))
+                          (and (vlax-property-available-p obj 'IsXref)
+                               (= (vla-get-IsXref obj) :vlax-true)))
+                    (princ (strcat "\n[UB] Warning: Block reference \"" blkName "\" is an External Reference (Xref) and cannot be made unique."))
+                    ;; Valid block reference -> add to blkGroups
+                    (progn
+                      (setq isDynamic (and (vlax-property-available-p obj 'IsDynamicBlock)
+                                           (= (vla-get-IsDynamicBlock obj) :vlax-true)))
+                      (setq match (assoc blkName blkGroups))
+                      (if match
+                        (setq blkGroups
+                          (subst (list blkName (cadr match) (cons ent (caddr match)))
+                                 match
+                                 blkGroups))
+                        (setq blkGroups (cons (list blkName isDynamic (list ent)) blkGroups))
+                      )
+                    )
+                  )
+                )
+              )
+              (princ "\n[UB] Error: Failed to access block reference COM object.")
+            )
+          )
+          (princ "\n[UB] Selected entity is not a block reference.")
+        )
+      )
+
+      ;; Preserve selection order for groups and their entity lists
+      (setq blkGroups
+        (mapcar '(lambda (g) (list (car g) (cadr g) (reverse (caddr g))))
+                (reverse blkGroups)))
+
+      ;; Process each block definition group
+      (setq results nil)
+      (foreach grp blkGroups
+        (setq blkName   (car grp)
+              isDynamic (cadr grp)
+              grpEnts   (caddr grp)
+              parsed    (CadSetup:ParseBlockName blkName)
+              newName   nil)
+
+        (if parsed
+          ;; 1. Standard CadSetup block: Bump version and refresh MOD timestamp
+          (progn
+            (setq curVer  (cdr (assoc 'VERSION parsed))
+                  newVer  (1+ curVer)
+                  curInit (cdr (assoc 'INIT parsed))
+                  newMod  (CadSetup:FormatBlockTimestamp)
+                  newName (CadSetup:BuildBlockName
+                            (cdr (assoc 'TYPE parsed))
+                            (cdr (assoc 'HANDLE parsed))
+                            newVer
+                            newMod
+                            curInit))
+
+            (while (tblsearch "BLOCK" newName)
+              (setq newVer  (1+ newVer)
+                    newName (CadSetup:BuildBlockName
+                              (cdr (assoc 'TYPE parsed))
+                              (cdr (assoc 'HANDLE parsed))
+                              newVer
+                              newMod
+                              curInit)))
+          )
+          ;; 2. Non-Standard block: Keep name with unique suffix, or convert to GRP/DYN
+          (progn
+            (initget "Keep GRP DYN Cancel")
+            (setq typeChoice (getkword (strcat "\nBlock \"" blkName "\" (" (itoa (length grpEnts)) " reference" (if (> (length grpEnts) 1) "s" "") ") is non-standard. Make unique as [Keep name/GRP/DYN/Cancel] <Keep>: ")))
+            (if (or (null typeChoice) (= typeChoice "")) (setq typeChoice "Keep"))
+
+            (cond
+              ((= typeChoice "Keep")
+               (setq newName (CadSetup:EnsureUniqueBlockName (strcat blkName "_1"))))
+              ((or (= typeChoice "GRP") (= typeChoice "DYN"))
+               (setq handle  (CadSetup:GetNextDbHandle)
+                     newMod  (CadSetup:FormatBlockTimestamp)
+                     newName (CadSetup:BuildBlockName typeChoice handle 1 newMod newMod)
+                     newName (CadSetup:EnsureUniqueBlockName newName)))
+              (T
+               (setq newName nil))
+            )
+          )
+        )
+
+        (if newName
+          (progn
+            ;; Clone block definition ONCE for all selected instances of this block
+            (setq cloneOk (CadSetup:CloneBlockDefinition blkName newName isDynamic))
+            (if cloneOk
+              (progn
+                (setq updatedList nil)
+                ;; Reassign ALL selected block references in this group to the same newName
+                (foreach e grpEnts
+                  (setq updatedEnt (CadSetup:ReassignBlockReference e newName isDynamic))
+                  (if updatedEnt
+                    (setq updatedList (cons updatedEnt updatedList))
+                    (princ (strcat "\n[UB] Error: Failed to reassign block reference to \"" newName "\"."))
+                  )
+                )
+                (if updatedList
+                  (setq results (cons (list (reverse updatedList) blkName newName) results))
+                )
+              )
+              (princ (strcat "\n[UB] Error: Failed to clone block definition \"" blkName "\" to \"" newName "\"."))
+            )
+          )
+        )
+      )
+
+      (if isSingleInput
+        (if results
+          (list (car (caar results)) (cadar results) (caddar results))
+          nil
+        )
+        (reverse results)
+      )
     )
-    (progn
-      (princ "\n[UB] Selected entity is not a block reference.")
-      nil
-    )
+    nil
   )
 )
 
-;; UB : Unique Block - Creates a unique copy of the block definition and updates the selected block only
-(defun c:UB (/ *error* ss ent count newEnts res oldCmd i)
+;; UB : Unique Block - Creates a unique copy of the block definition and updates the selected block only.
+;; If multiple blocks are selected, all instances of the same block definition receive the same update name.
+(defun c:UB (/ *error* ss count newEnts res oldCmd grp updatedEnts origName uName ent)
   (defun *error* (msg)
     (if oldCmd (setvar 'cmdecho oldCmd))
     (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
@@ -815,20 +887,15 @@
   (setq oldCmd (getvar 'cmdecho))
   (setvar 'cmdecho 0)
 
-  ;; Check pre-selection or prompt for block reference
+  ;; Check pre-selection or prompt for block reference(s)
   (setq ss (ssget "_I" '((0 . "INSERT"))))
   (if (and ss (> (sslength ss) 0))
     nil ; ss already contains pre-selected block reference(s)
     (progn
       (setvar 'cmdecho oldCmd)
-      (setq ent (car (entsel "\nSelect block reference to make unique [UB]: ")))
+      (princ "\nSelect block reference(s) to make unique [UB]: ")
+      (setq ss (ssget '((0 . "INSERT"))))
       (setvar 'cmdecho 0)
-      (if ent
-        (if (= (cdr (assoc 0 (entget ent))) "INSERT")
-          (setq ss (ssadd ent (ssadd)))
-          (princ "\n[UB] Selected entity is not a block reference.")
-        )
-      )
     )
   )
 
@@ -837,19 +904,22 @@
       (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
       (setq count 0
             newEnts (ssadd))
-      (repeat (setq i (sslength ss))
-        (setq ent (ssname ss (setq i (1- i))))
-        (setq res (CadSetup:MakeBlockUnique ent))
-        (if res
-          (progn
+      (setq res (CadSetup:MakeBlockUnique ss))
+      (if res
+        (foreach grp res
+          (setq updatedEnts (car grp)
+                origName    (cadr grp)
+                uName       (caddr grp))
+          (foreach ent updatedEnts
             (setq count (1+ count))
-            (if (car res)
-              (ssadd (car res) newEnts)
-            )
-            (princ (strcat "\n[UB] Block made unique (selected block reference updated):"))
-            (princ (strcat "\n     Original: \"" (cadr res) "\""))
-            (princ (strcat "\n     Unique  : \"" (caddr res) "\""))
+            (ssadd ent newEnts)
           )
+          (if (= (length updatedEnts) 1)
+            (princ (strcat "\n[UB] Block made unique (selected block reference updated):"))
+            (princ (strcat "\n[UB] Block made unique (" (itoa (length updatedEnts)) " block references updated to same name):"))
+          )
+          (princ (strcat "\n     Original: \"" origName "\""))
+          (princ (strcat "\n     Unique  : \"" uName "\""))
         )
       )
       (if (> count 0)
@@ -860,9 +930,7 @@
         (princ (strcat "\n[UB] Successfully made " (itoa count) " block references unique."))
       )
     )
-    (if (not ent)
-      (princ "\n[UB] No block reference selected.")
-    )
+    (princ "\n[UB] No block reference(s) selected.")
   )
 
   (setvar 'cmdecho oldCmd)
@@ -1195,6 +1263,94 @@
 (defun c:GROUP-ISOLATE   () (c:GIS))
 (defun c:GROUPUNISOLATE  () (c:GUN))
 (defun c:GROUP-UNISOLATE () (c:GUN))
+
+
+;;; --------------------------------------------------------------------------
+;;; 1c. IN-PLACE REFERENCE EDITING (RA / REFEDITALL)
+;;; --------------------------------------------------------------------------
+;; Workflow:
+;;   RA : Refedit All — In-place block / Xref editing with all objects editable.
+;;        Closes active refedit session (saving changes) if currently in one,
+;;        acquires target block (pre-selected or interactive pick), and opens
+;;        -REFEDIT with all objects checked out and attribute dialog suppressed.
+
+(defun c:RA ( / *error* ss ent hnd pt sel target oldexp minpt maxpt)
+  (vl-load-com)
+
+  (defun *error* (msg)
+    (if (and oldexp (getvar "EXPERT")) (setvar "EXPERT" oldexp))
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[RA] Error: " msg))
+    )
+    (princ)
+  )
+
+  ;; 1. Acquire target block/Xref (Pre-selected or Prompted)
+  (cond
+    ;; Check if a block is already selected (Pickfirst / Double-click)
+    ((setq ss (ssget "_I" '((0 . "INSERT"))))
+     (setq ent (ssname ss 0))
+     (setq hnd (cdr (assoc 5 (entget ent))))
+     ;; Grab a valid point on the block using its bounding box
+     (if (not (vl-catch-all-error-p (vl-catch-all-apply 'vla-getboundingbox (list (vlax-ename->vla-object ent) 'minpt 'maxpt))))
+       (setq pt (vlax-safearray->list minpt))
+       (setq pt (cdr (assoc 10 (entget ent))))
+     )
+    )
+    ;; Otherwise, prompt user to pick a block
+    ((setq sel (entsel "\nSelect block or Xref to Refedit All: "))
+     (if (= (cdr (assoc 0 (entget (car sel)))) "INSERT")
+       (progn
+         (setq ent (car sel))
+         (setq hnd (cdr (assoc 5 (entget ent))))
+         (setq pt  (cadr sel))
+       )
+       (princ "\nSelected object is not a block or Xref.")
+     )
+    )
+  )
+
+  ;; 2. Close active Refedit (if any) and open the new target block
+  (if (or hnd pt)
+    (progn
+      ;; Clear active selection so REFCLOSE doesn't get confused
+      (sssetfirst nil nil)
+
+      ;; If already inside a REFEDIT session, save and exit silently
+      (if (/= (getvar "REFEDITNAME") "")
+        (progn
+          (setq oldexp (getvar "EXPERT"))
+          (setvar "EXPERT" 5) ; Suppress confirmation popups
+          
+          ;; Use _.refclose (no hyphen), "_S" to Save, and confirm if prompted
+          (command "_.refclose" "_S")
+          (while (> (getvar "CMDACTIVE") 0) (command "_Y"))
+          
+          (setvar "EXPERT" oldexp)
+          (setq oldexp nil)
+        )
+      )
+
+      ;; 3. Re-select the target block and launch -REFEDIT
+      (cond
+        ;; Case A: External block whose entity handle survived REFCLOSE
+        ((and hnd (setq target (handent hnd)) (entget target))
+         (sssetfirst nil (ssadd target))
+         (command "_.-refedit" "_O" "_A" "_N")
+        )
+        ;; Case B: Nested block whose handle regenerated during REFCLOSE
+        (pt
+         (command "_.-refedit" "_non" pt "_O" "_A" "_N")
+        )
+      )
+    )
+  )
+  (princ)
+)
+
+;; Command Aliases for In-Place Refedit All
+(defun c:REFEDITALL  () (c:RA))
+(defun c:REFEDIT-ALL () (c:RA))
 
 
 ;;; --------------------------------------------------------------------------

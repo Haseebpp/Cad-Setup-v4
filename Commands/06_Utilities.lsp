@@ -2,7 +2,7 @@
 ;;; 06_Utilities.lsp - Drawing Cleanup, Measurement, System Fixes & Utilities
 ;;; Layer: Commands (Priority 06)
 ;;; Author   : Haseeb
-;;; Commands : TC, BBOX, CTRANS, FL0, HSCALE (HSC), HROT (HR), PUA (QA), FIXSELECT, FIXBOX, WF, WR, LOAD-STYLES (LST)
+;;; Commands : TC, BBOX, CTRANS, CDIMSCALE (CSCALE, CANNO, CDSCALE), FL0, HSCALE (HSC), HROT (HR), PUA (QA), FIXSELECT, FIXBOX, WF, WR, LOAD-STYLES (LST)
 ;;; ==========================================================================
 
 (vl-load-com)
@@ -334,6 +334,144 @@
   (setvar "CMDECHO" oldCmd)
   (princ)
 )
+
+
+;; CDIMSCALE : Change Dimension Annotative Scale by Viewport Scale
+;; Sets selected dimensions' annotative scale to match the target viewport and deletes all other scales.
+;; Aliases: CSCALE, CANNO, CDSCALE, CDANNO
+(defun c:CDIMSCALE ( / *error* oldCmd ss dimSS i ent vpEnt ssVp j vpTest foundVP targetScale count )
+  (setq oldCmd (getvar "CMDECHO"))
+
+  (defun *error* (msg)
+    (if oldCmd (setvar "CMDECHO" oldCmd))
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[CDIMSCALE] Error: " msg))
+    )
+    (princ)
+  )
+
+  (setvar "CMDECHO" 0)
+
+  ;; 1. Support implied pre-selection (Pickfirst) or prompt for dimensions
+  (setq ss (ssget "_I"))
+  (setq dimSS (ssadd))
+
+  (if (and ss (> (sslength ss) 0))
+    (progn
+      (setq i 0)
+      (while (< i (sslength ss))
+        (setq ent (ssname ss i))
+        (if (wcmatch (cdr (assoc 0 (entget ent))) "*DIMENSION,LEADER,MULTILEADER")
+          (ssadd ent dimSS)
+        )
+        (setq i (1+ i))
+      )
+      (sssetfirst nil nil) ; Clear active selection highlights
+    )
+  )
+
+  (if (= (sslength dimSS) 0)
+    (progn
+      (setvar "CMDECHO" oldCmd)
+      (princ "\nSelect dimensions to match viewport annotative scale [CDIMSCALE]: ")
+      (setq dimSS (ssget '((0 . "*DIMENSION,LEADER,MULTILEADER"))))
+      (setvar "CMDECHO" 0)
+    )
+  )
+
+  (if (and dimSS (> (sslength dimSS) 0))
+    (progn
+      ;; 2. Determine target scale from Viewport
+      (setq targetScale nil)
+
+      (cond
+        ;; A. Inside active floating viewport (Layout tab with cvport > 1)
+        ((and (= (getvar "TILEMODE") 0) (> (getvar "CVPORT") 1))
+         (setq targetScale (getvar "CANNOSCALE"))
+         (if (or (null targetScale) (= targetScale ""))
+           (setq targetScale (CadSetup:GetViewportScaleName (CadSetup:GetActiveViewportObject)))
+         )
+         (if targetScale
+           (princ (strcat "\n[CDIMSCALE] Inheriting scale from active viewport: \"" targetScale "\""))
+         )
+        )
+
+        ;; B. In Paper Space outside viewports (cvport = 1)
+        ((and (= (getvar "TILEMODE") 0) (= (getvar "CVPORT") 1))
+         (setvar "CMDECHO" oldCmd)
+         (setq vpEnt (car (entsel "\nSelect viewport to inherit annotative scale from <Enter for layout default>: ")))
+         (setvar "CMDECHO" 0)
+         (if (and vpEnt (= (cdr (assoc 0 (entget vpEnt))) "VIEWPORT"))
+           (setq targetScale (CadSetup:GetViewportScaleName vpEnt))
+           ;; Fallback: auto-detect floating viewport on current layout tab
+           (progn
+             (setq ssVp (ssget "_X" (list '(0 . "VIEWPORT") (cons 410 (getvar "CTAB")))))
+             (if ssVp
+               (progn
+                 (setq j 0
+                       foundVP nil)
+                 (while (and (< j (sslength ssVp)) (not foundVP))
+                   (setq vpTest (ssname ssVp j))
+                   (if (> (cdr (assoc 69 (entget vpTest))) 1)
+                     (setq foundVP vpTest)
+                   )
+                   (setq j (1+ j))
+                 )
+                 (if foundVP
+                   (setq targetScale (CadSetup:GetViewportScaleName foundVP))
+                 )
+               )
+             )
+           )
+         )
+         (if targetScale
+           (princ (strcat "\n[CDIMSCALE] Viewport scale resolved to: \"" targetScale "\""))
+         )
+        )
+
+        ;; C. In Model Space tab (TILEMODE = 1)
+        (t
+         (setq targetScale (getvar "CANNOSCALE"))
+         (princ (strcat "\n[CDIMSCALE] Using current model annotative scale: \"" targetScale "\""))
+        )
+      )
+
+      ;; 3. Apply target scale to selected dimensions and strip other scales
+      (if (and targetScale (= (type targetScale) 'STR) (> (strlen targetScale) 0))
+        (progn
+          (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
+
+          (setq count 0
+                i 0)
+          (while (< i (sslength dimSS))
+            (setq ent (ssname dimSS i))
+            (if (CadSetup:SetEntitySingleAnnoScale ent targetScale)
+              (setq count (1+ count))
+            )
+            (setq i (1+ i))
+          )
+
+          (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+
+          (princ (strcat "\n[CDIMSCALE] Success: Updated " (itoa count)
+                         " dimension(s) to scale \"" targetScale "\" (all other scales removed)."))
+        )
+        (princ "\n[CDIMSCALE] Error: Could not determine viewport annotative scale.")
+      )
+    )
+    (princ "\n[CDIMSCALE] No dimensions selected.")
+  )
+
+  (setvar "CMDECHO" oldCmd)
+  (princ)
+)
+
+;; Aliases for CDIMSCALE
+(defun c:CSCALE  () (c:CDIMSCALE))
+(defun c:CANNO   () (c:CDIMSCALE))
+(defun c:CDSCALE () (c:CDIMSCALE))
+(defun c:CDANNO  () (c:CDIMSCALE))
 
 ;; FL0 : Flatten Selected Objects to 2D (Z = 0)
 (defun c:FL0 ( / *error* ss oldecho )

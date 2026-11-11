@@ -31,13 +31,15 @@
 ;;; ==========================================================================
 
 ;;; --- DRAW & GEOMETRY ------------------------------------------------------
+(defun c:W   () (initcommandversion) (command "_.PLINE")     (princ)) ; W   -> Draw 2D Polyline (ergonomic left-hand)
 (defun c:P   () (initcommandversion) (command "_.PLINE")     (princ)) ; P   -> Draw 2D Polyline
 (defun c:L   () (initcommandversion) (command "_.LINE")      (princ)) ; L   -> Draw Line segments
 (defun c:R   () (initcommandversion) (command "_.RECTANG")   (princ)) ; R   -> Draw Rectangle
 (defun c:CI  () (initcommandversion) (command "_.CIRCLE")    (princ)) ; CI  -> Draw Circle
 (defun c:A   () (initcommandversion) (command "_.ARC")       (princ)) ; A   -> Draw 3-Point Arc
 (defun c:H   () (initcommandversion) (command "_.HATCH") (princ)) ; H   -> Open Hatch Ribbon / Fill boundaries
-(defun c:W   () (initcommandversion) (command "_.WIPEOUT")   (princ)) ; W   -> Create polygonal mask/wipeout
+(defun c:WI  () (initcommandversion) (command "_.WIPEOUT")   (princ)) ; WI  -> Create polygonal mask/wipeout
+(defun c:WP  () (initcommandversion) (command "_.WIPEOUT")   (princ)) ; WP  -> Create polygonal mask/wipeout
 (defun c:BO  () (initcommandversion) (command "_.BOUNDARY")  (princ)) ; BO  -> Create region/polyline boundary
 
 ;;; --- MEASURE & INQUIRE ----------------------------------------------------
@@ -388,6 +390,7 @@
 (defun c:B   () (initcommandversion) (initdia) (command "_.BLOCK") (princ)) ; B   -> Open Block Definition creation dialog
 (defun c:I   () (initcommandversion) (command "_.INSERT") (princ)) ; I   -> Launch Modern Block Insertion palette
 (defun c:G   () (c:GB))                                                ; G   -> Group Block at Origin (GB)
+(defun c:RA  () (c:REFEDITALL))                                        ; RA  -> In-place Refedit All objects in target Block/Xref (REFEDITALL)
 
 ;;; --- ZOOM & VIEW SHORTCUTS ------------------------------------------------
 (defun c:ZE  () (initcommandversion) (command "_.ZOOM" "_E")   (princ)) ; ZE  -> Zoom Extents (fits all geometry to screen)
@@ -397,6 +400,8 @@
 (defun c:REG  () (initcommandversion) (command "_.REGEN")       (princ)) ; RE  -> Regenerate active viewport display cache
 (defun c:REA () (initcommandversion) (command "_.REGENALL")    (princ)) ; REA -> Regenerate all viewports and model tabs
 (defun c:VR  () (c:VPCLIPRECTANGLE))                                   ; VR  -> Copy Viewport & Clip with Rectangle (VPCLIPRECTANGLE)
+(defun c:ZA  () (c:ZOOMANNO))                                          ; ZA  -> Dynamic Annotative Scale from Zoom (ZOOMANNO)
+(defun c:ZANNO () (c:ZOOMANNO))                                       ; ZANNO -> Dynamic Annotative Scale from Zoom (ZOOMANNO)
 
 ;;; --- DIMENSIONING & ANNOTATION --------------------------------------------
 (defun c:DA  () (initcommandversion) (command "_.DIMALIGNED")  (princ)) ; DA  -> Aligned dimension (follows curve angle)
@@ -415,6 +420,10 @@
 (defun c:DC  () (initcommandversion) (command "_.DIMCONTINUE") (princ)) ; DC  -> Chain-continue from previous dimension extension line
 (defun c:DE  () (initcommandversion) (command "_.DIMEDIT")     (princ)) ; DE  -> Edit dimension text / orientation
 (defun c:TE  () (initcommandversion) (command "_.TEXTEDIT")    (princ)) ; TE  -> Edit MText, DText, or Dimension string
+(defun c:CSCALE    () (c:CDIMSCALE))                                    ; CSCALE    -> Change Dimension Annotative Scale by Viewport Scale (CDIMSCALE)
+(defun c:CANNO     () (c:CDIMSCALE))                                    ; CANNO     -> Change Dimension Annotative Scale (CDIMSCALE)
+(defun c:CDSCALE   () (c:CDIMSCALE))                                    ; CDSCALE   -> Change Dimension Annotative Scale (CDIMSCALE)
+(defun c:CDANNO    () (c:CDIMSCALE))                                    ; CDANNO    -> Change Dimension Annotative Scale (CDIMSCALE)
 
 ;;; --- PRODUCTIVITY & FILE UTILITIES ----------------------------------------
 (defun c:QS  () (initcommandversion) (command "_.QSAVE")       (princ)) ; QS  -> Quick Save current drawing without prompt

@@ -32,7 +32,7 @@
   ;; -------------------------------------------------------------------------
   ("CMDECHO"            0          "Drafting"    "Suppresses command line echoes during automation")
   ("PICKFIRST"          1          "Drafting"    "Noun/verb selection enabled (select before command)")
-  ("PICKADD"            2          "Drafting"    "Accumulate selection sets without holding Shift")
+  ("PICKADD"            0          "Drafting"    "Standard selection (hold Shift to add to selection set)")
   ("HIGHLIGHT"          1          "Drafting"    "Highlight selected drawing entities")
   ("LEGACYCTRLPICK"     0          "Drafting"    "Enable Ctrl+Click subentity and segment selection")
   ("FILEDIA"            1          "Drafting"    "Force standard Windows file navigation dialogs")

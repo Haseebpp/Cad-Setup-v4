@@ -277,9 +277,11 @@
   )
 )
 
-;; DSL : Dynamic Stretch Linear - Auto-create dynamic block with Width & Height linear stretch
+;; DSL : Dynamic Stretch Linear - Auto-create dynamic block with Width & Height linear stretch (+ optional Top-Right Rotation grip)
 (defun c:DSL (/ *error* ss bbox minPt maxPt basePt w h tol dimOffset
                 handle ts blkName oldCmd oldAtt oldOsm oldBlkLock oldCmdDia oldActionBar
+                addRot rotChoice
+                ptCenter ptTopRight ptLabelRot ptActRot ptRotSel1 ptRotSel2 entBeforeRot pRot
                 ptLabelX ptFrameX1 ptFrameX2 ptActX entBefore pX
                 ptLabelY ptFrameY1 ptFrameY2 ptActY pY newEnt)
   (defun *error* (msg)
@@ -346,6 +348,11 @@
         )
       )
 
+      ;; Optional Top-Right Rotation grip prompt (default No to keep pure 2-axis stretch fast)
+      (initget "Yes No")
+      (setq rotChoice (getkword "\nInclude Top-Right Rotation grip? [Yes/No] <No>: "))
+      (setq addRot (and rotChoice (= (strcase rotChoice) "YES")))
+
       (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
 
       ;; Generate unique standard DYN block name
@@ -361,6 +368,16 @@
       ;; Prepare dynamic block parameters & action geometry (inside Block Editor, basePt is at 0,0,0)
       (setq tol       0.001
             dimOffset (max 1.0 (* 0.08 (max w h))))
+
+      ;; Geometry for Top-Right Rotation around Block Center (W/2, H/2, 0) with grip at (W, H, 0):
+      (if addRot
+        (setq ptCenter   (list (/ w 2.0) (/ h 2.0) 0.0)
+              ptTopRight (list w h 0.0)
+              ptLabelRot (list (+ w dimOffset) (+ h dimOffset) 0.0)
+              ptActRot   (list (+ w (* 1.5 dimOffset)) (+ h (* 1.5 dimOffset)) 0.0)
+              ptRotSel1  (list (* -2.0 dimOffset) (* -2.0 dimOffset) 0.0)
+              ptRotSel2  (list (+ w (* 2.0 dimOffset)) (+ h (* 2.0 dimOffset)) 0.0))
+      )
 
       ;; Geometry for Horizontal (Width) Stretch along bottom edge:
       ;; Grip at (W, 0, 0), stretching right half: [W/2 - tol, W + tol] across full height [-tol, H + tol]
@@ -388,10 +405,23 @@
         (progn
           ;; Frame the entire block plus generous margin so crossing selection (_C) never clips off-screen
           (command "._ZOOM" "_Window"
-                   (list (* -3.0 dimOffset) (* -3.0 dimOffset) 0.0)
-                   (list (+ w (* 3.0 dimOffset)) (+ h (* 3.0 dimOffset)) 0.0))
+                   (list (* -3.5 dimOffset) (* -3.5 dimOffset) 0.0)
+                   (list (+ w (* 3.5 dimOffset)) (+ h (* 3.5 dimOffset)) 0.0))
 
-          ;; 1. Horizontal Linear Parameter ("Width") on bottom edge with 1 grip on right (W, 0, 0)
+          ;; 1. Optional Rotation Parameter ("Angle") centered at (W/2, H/2, 0) with 1 grip at Top-Right (W, H, 0)
+          ;;    Created prior to Stretch actions so Width/Height crossing windows include it and keep its grip pinned to (W, H)
+          (setq pRot nil)
+          (if addRot
+            (progn
+              (setq entBeforeRot (entlast))
+              (if (not (vl-cmdf "._BPARAMETER" "_Rotation" "_Name" "Angle" ptCenter ptTopRight ptTopRight ptLabelRot 1))
+                (command "._BPARAMETER" "_Rotation" ptCenter ptTopRight ptTopRight ptLabelRot 1)
+              )
+              (setq pRot (entlast))
+            )
+          )
+
+          ;; 2. Horizontal Linear Parameter ("Width") on bottom edge with 1 grip on right (W, 0, 0)
           (setq entBefore (entlast))
           (if (not (vl-cmdf "._BPARAMETER" "_Linear" "_Name" "Width" '(0.0 0.0 0.0) (list w 0.0 0.0) ptLabelX 1))
             (command "._BPARAMETER" "_Linear" '(0.0 0.0 0.0) (list w 0.0 0.0) ptLabelX 1)
@@ -405,11 +435,11 @@
                      (list w 0.0 0.0)                    ; parameter point (grip)
                      ptFrameX1                           ; stretch frame corner 1
                      ptFrameX2                           ; stretch frame corner 2
-                     "_C" ptFrameX1 ptFrameX2 ""         ; objects crossing window
+                     "_C" ptFrameX1 ptFrameX2 ""         ; objects + Angle parameter crossing window
                      ptActX)                             ; action icon location
           )
 
-          ;; 2. Vertical Linear Parameter ("Height") on left edge with 1 grip on top (0, H, 0)
+          ;; 3. Vertical Linear Parameter ("Height") on left edge with 1 grip on top (0, H, 0)
           (setq entBefore (entlast))
           (if (not (vl-cmdf "._BPARAMETER" "_Linear" "_Name" "Height" '(0.0 0.0 0.0) (list 0.0 h 0.0) ptLabelY 1))
             (command "._BPARAMETER" "_Linear" '(0.0 0.0 0.0) (list 0.0 h 0.0) ptLabelY 1)
@@ -423,8 +453,16 @@
                      (list 0.0 h 0.0)                    ; parameter point (grip)
                      ptFrameY1                           ; stretch frame corner 1
                      ptFrameY2                           ; stretch frame corner 2
-                     "_C" ptFrameY1 ptFrameY2 ""         ; objects crossing window
+                     "_C" ptFrameY1 ptFrameY2 ""         ; objects + Angle parameter crossing window
                      ptActY)                             ; action icon location
+          )
+
+          ;; 4. Rotate Action on "Angle" parameter (if requested)
+          (if (and addRot pRot (not (eq pRot entBeforeRot)))
+            (command "._BACTIONTOOL" "_Rotate"
+                     (list pRot ptTopRight)              ; parameter selection
+                     "_C" ptRotSel1 ptRotSel2 ""         ; objects + Width/Height parameters crossing window
+                     ptActRot)                           ; action icon location
           )
 
           ;; Save and close Block Editor
@@ -452,7 +490,8 @@
       )
 
       (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
-      (princ (strcat "\n[DSL] Dynamic Stretch Block created: \"" blkName "\" [W: " (rtos w 2 2) " x H: " (rtos h 2 2) "]."))
+      (princ (strcat "\n[DSL] Dynamic Stretch Block created: \"" blkName "\" [W: " (rtos w 2 2) " x H: " (rtos h 2 2) "]"
+                     (if addRot " (+ Top-Right Rotation)" "") "."))
     )
     (princ "\n[DSL] No objects selected.")
   )

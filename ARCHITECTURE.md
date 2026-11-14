@@ -164,7 +164,7 @@ d:\HASEEB\Cad-Setup-v4\
 
 │   ├── 04_Layout-Views.lsp     ; Viewport and presentation tools (TS, A3SERIES, VPCLIPRECTANGLE, VR, ZOOMANNO/ZA)
 
-│   ├── 05_Selection-Filters.lsp; Fast selection isolators (SR, SL, ST, SB, SX, SHT/SH, SP, SLN, SCIR, SV, STB, SW, SA)
+│   ├── 05_Selection-Filters.lsp; Fast selection isolators (SR, SL, ST, SB, SX, SHT/SH, SP, SLN, SCIR, SVP, STB, SW, SA)
 
 │   ├── 06_Utilities.lsp        ; Geometry calculation & repair (TC, BBOX, CTRANS, CDIMSCALE/CSCALE, FL0, HSCALE/HSC, HROT/HR, PUA, WF, WR, LST)
 

@@ -1647,6 +1647,205 @@
 
 
 ;;; --------------------------------------------------------------------------
+;;; 2b. RECURSIVE BLOCK EXPLODE (EXPLODE-BLOCKS, XX)
+;;; --------------------------------------------------------------------------
+
+;; CadSetup:ExplodeSingleInsert - Attempts to explode one INSERT entity in place.
+;; Returns (status children) where status is 'OK or a skip reason symbol.
+(defun CadSetup:ExplodeSingleInsert (ent blocks / d obj blkName blkRec layRec cols rows blkDef res sa expEnts lastBefore e)
+  (setq d (if ent (entget ent) nil))
+  (cond
+    ((or (null d) (/= (cdr (assoc 0 d)) "INSERT"))
+     (list 'FAILED nil)
+    )
+    (T
+     (setq obj     (vlax-ename->vla-object ent)
+           blkName (cdr (assoc 2 d))
+           blkRec  (if blkName (tblsearch "BLOCK" blkName) nil)
+           layRec  (tblsearch "LAYER" (cdr (assoc 8 d)))
+           cols    (cdr (assoc 70 d))
+           rows    (cdr (assoc 71 d)))
+     (cond
+       ((or (and blkRec (= (logand (cdr (assoc 70 blkRec)) 4) 4))
+            (and (vlax-property-available-p obj 'IsXref)
+                 (= (vla-get-IsXref obj) :vlax-true)))
+        (list 'XREF nil)
+       )
+       ((and layRec (= (logand (cdr (assoc 70 layRec)) 4) 4))
+        (list 'LOCKED nil)
+       )
+       ((or (and cols (> cols 1)) (and rows (> rows 1)))
+        (list 'MINSERT nil)
+       )
+       ((and blocks blkName
+             (not (vl-catch-all-error-p (setq blkDef (vl-catch-all-apply 'vla-Item (list blocks blkName)))))
+             (vlax-property-available-p blkDef 'Explodable)
+             (= (vla-get-Explodable blkDef) :vlax-false))
+        (list 'UNEXPLODABLE nil)
+       )
+       (T
+        (setq res (vl-catch-all-apply 'vla-Explode (list obj)))
+        (if (not (vl-catch-all-error-p res))
+          (progn
+            (setq sa (vlax-variant-value res))
+            (if (and (= (type sa) 'SAFEARRAY)
+                     (>= (vlax-safearray-get-u-bound sa 1) (vlax-safearray-get-l-bound sa 1)))
+              (setq expEnts (mapcar 'vlax-vla-object->ename (vlax-safearray->list sa)))
+              (setq expEnts nil)
+            )
+            (vl-catch-all-apply 'vla-Delete (list obj))
+            (if (or (null (entget ent)) (vlax-erased-p obj))
+              (list 'OK expEnts)
+              (list 'FAILED nil)
+            )
+          )
+          ;; Fallback for blocks ActiveX cannot explode directly (e.g. non-uniform scale)
+          (progn
+            (setq lastBefore (entlast))
+            (vl-cmdf "_.EXPLODE" ent)
+            (if (> (getvar 'cmdactive) 0) (vl-cmdf ""))
+            (if (or (null (entget ent)) (vlax-erased-p obj))
+              (progn
+                (setq expEnts nil
+                      e (if lastBefore (entnext lastBefore) (entnext)))
+                (while e
+                  (setq expEnts (cons e expEnts)
+                        e (entnext e))
+                )
+                (list 'OK (reverse expEnts))
+              )
+              (list 'FAILED nil)
+            )
+          )
+        )
+       )
+     )
+    )
+  )
+)
+
+;; EXPLODE-BLOCKS (XX) : Recursively explode blocks in selection until no blocks remain
+(defun c:EXPLODE-BLOCKS ( / *error* oldCmd oldExpl ss i ent queue nextQueue doc blocks
+                            explodedCount levels passExploded res status children child cd
+                            skipXref skipLocked skipMinsert skipUnexplodable skipOther
+                            skipParts skipStr )
+  (defun *error* (msg)
+    (if oldExpl (setvar 'explmode oldExpl))
+    (if oldCmd (setvar 'cmdecho oldCmd))
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[XX] Error: " msg))
+    )
+    (princ)
+  )
+
+  (setq oldCmd  (getvar 'cmdecho)
+        oldExpl (getvar 'explmode))
+  (setvar 'cmdecho 0)
+  (if oldExpl (setvar 'explmode 1))
+
+  (setq ss (ssget "_I"))
+  (if (not ss)
+    (progn
+      (princ "\nSelect blocks to explode until no blocks remain [XX]: ")
+      (setq ss (ssget))
+    )
+  )
+
+  (if ss
+    (progn
+      (sssetfirst nil nil)
+      (setq i 0 queue nil)
+      (while (< i (sslength ss))
+        (setq ent (ssname ss i))
+        (if (= (cdr (assoc 0 (entget ent))) "INSERT")
+          (setq queue (cons ent queue))
+        )
+        (setq i (1+ i))
+      )
+      (setq queue (reverse queue))
+
+      (if queue
+        (progn
+          (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
+
+          (setq doc    (vla-get-activedocument (vlax-get-acad-object))
+                blocks (vla-get-blocks doc)
+                explodedCount 0
+                levels 0
+                skipXref 0
+                skipLocked 0
+                skipMinsert 0
+                skipUnexplodable 0
+                skipOther 0)
+
+          (while queue
+            (setq nextQueue nil
+                  passExploded 0)
+            (foreach ent queue
+              (setq res    (CadSetup:ExplodeSingleInsert ent blocks)
+                    status (car res))
+              (cond
+                ((eq status 'OK)
+                 (setq explodedCount (1+ explodedCount)
+                       passExploded  (1+ passExploded)
+                       children      (cadr res))
+                 (foreach child children
+                   (if (and child (setq cd (entget child)) (= (cdr (assoc 0 cd)) "INSERT"))
+                     (setq nextQueue (cons child nextQueue))
+                   )
+                 )
+                )
+                ((eq status 'XREF)         (setq skipXref (1+ skipXref)))
+                ((eq status 'LOCKED)       (setq skipLocked (1+ skipLocked)))
+                ((eq status 'MINSERT)      (setq skipMinsert (1+ skipMinsert)))
+                ((eq status 'UNEXPLODABLE) (setq skipUnexplodable (1+ skipUnexplodable)))
+                (T                         (setq skipOther (1+ skipOther)))
+              )
+            )
+            (if (> passExploded 0) (setq levels (1+ levels)))
+            (setq queue (reverse nextQueue))
+          )
+
+          (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+
+          (setq skipParts nil)
+          (if (> skipXref 0)         (setq skipParts (cons (strcat (itoa skipXref) " Xref") skipParts)))
+          (if (> skipLocked 0)       (setq skipParts (cons (strcat (itoa skipLocked) " locked-layer") skipParts)))
+          (if (> skipMinsert 0)      (setq skipParts (cons (strcat (itoa skipMinsert) " MINSERT") skipParts)))
+          (if (> skipUnexplodable 0) (setq skipParts (cons (strcat (itoa skipUnexplodable) " non-explodable") skipParts)))
+          (if (> skipOther 0)        (setq skipParts (cons (strcat (itoa skipOther) " unexplodable") skipParts)))
+          (setq skipParts (reverse skipParts)
+                skipStr   "")
+          (if skipParts
+            (progn
+              (setq skipStr (car skipParts))
+              (foreach part (cdr skipParts)
+                (setq skipStr (strcat skipStr ", " part))
+              )
+              (setq skipStr (strcat " (Skipped: " skipStr ")"))
+            )
+          )
+
+          (princ (strcat "\n[XX] Exploded " (itoa explodedCount) " block(s) across "
+                         (itoa levels) " level(s)." skipStr))
+        )
+        (princ "\n[XX] No block(s) found in selection.")
+      )
+    )
+    (princ "\n[XX] No objects selected.")
+  )
+
+  (if oldExpl (setvar 'explmode oldExpl))
+  (setvar 'cmdecho oldCmd)
+  (princ)
+)
+
+(defun c:EXPLODEBLOCKS () (c:EXPLODE-BLOCKS))
+(defun c:XX            () (c:EXPLODE-BLOCKS))
+
+
+;;; --------------------------------------------------------------------------
 ;;; 3. STANDARD JOINERY BLOCK PROCEDURAL ENGINE & DCL PALETTE
 ;;; --------------------------------------------------------------------------
 

@@ -389,6 +389,7 @@
 (defun c:B   () (initcommandversion) (initdia) (command "_.BLOCK") (princ)) ; B   -> Open Block Definition creation dialog
 (defun c:I   () (initcommandversion) (command "_.INSERT") (princ)) ; I   -> Launch Modern Block Insertion palette
 (defun c:G   () (c:GB))                                                ; G   -> Group Block at Origin (GB)
+(defun c:XX  () (c:EXPLODE-BLOCKS))                                    ; XX  -> Recursively explode selected blocks until none remain
 
 ;;; --- ZOOM & VIEW SHORTCUTS ------------------------------------------------
 (defun c:ZE  () (initcommandversion) (command "_.ZOOM" "_E")   (princ)) ; ZE  -> Zoom Extents (fits all geometry to screen)
@@ -425,6 +426,7 @@
 
 ;;; --- PRODUCTIVITY & FILE UTILITIES ----------------------------------------
 (defun c:QS  () (initcommandversion) (command "_.QSAVE")       (princ)) ; QS  -> Quick Save current drawing without prompt
+(defun c:SV  () (command "_.SAVEASCOPY")                        (princ)) ; SV  -> Save an incremental copy without changing or saving active drawing
 (defun c:CL  () (initcommandversion) (command "_.CLOSE")       (princ)) ; CL  -> Close current active drawing window
 
 ;;; --- LAYER & VISIBILITY TOGGLES & WORKFLOW RESET ---------------------------
@@ -433,7 +435,6 @@
 (defun c:/   () (c:TOGGLE-HELP-LINE)) ; /   -> Toggle 01-HELP-LINE layer ON/OFF
 (defun c:1M  () (c:HLMODE))           ; 1M  -> Switch Help Line Mode (0=Points, 1=Lines, 2=Xlines)
 (defun c:1X  () (c:TOGGLE-HLMODE-1-2)); 1X  -> Toggle Help Line Mode between 1 (Lines) and 2 (Xlines)
-(defun c:XX  () (c:HL-XLINES))        ; XX  -> Set HLMODE to 2 (Xlines) and start Help Line drafting
 
 ;;; ==========================================================================
 ;;; FUTURE DRAFTING ALIASES TEMPLATE (USER-EXTENSIBLE)

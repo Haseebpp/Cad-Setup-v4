@@ -19,7 +19,7 @@
 ;;;   [1] / HL : Help Line & Guide Points (HLMODE 0=Points, 1=Lines [Default], 2=Xlines)
 ;;;   [1M] / HLMODE / HLM : Switch Help Line generation mode (0, 1, 2) & instantly refresh layer
 ;;;   [1X] : Rapid toggle between HLMODE 1 (Line Segments) and 2 (Infinite Xlines)
-;;;   [XX] : Direct Help Line with Infinite Xlines (sets HLMODE=2 and launches HL)
+;;;   [HL-XLINES] : Direct Help Line with Infinite Xlines (sets HLMODE=2 and launches HL)
 ;;;   [2] / VP : Viewport Boundary (Draws frame on "02-VIEW-PORT" / Reassigns selection to "02-VIEW-PORT")
 ;;;   [3] / GL : Grid Line & System Generator (DCL grid maker / Reassigns selection to "03-GRID-LINE")
 ;;;   [4] / LL : Line Layer (Interactive DCL selector / Reassigns selection to R-LINE-* layer)
@@ -518,19 +518,17 @@
 
 (defun c:1X () (c:TOGGLE-HLMODE-1-2))
 
-;;; HL-XLINES (XX): Set HLMODE to 2 (Infinite Xlines) and launch HL drafting
+;;; HL-XLINES: Set HLMODE to 2 (Infinite Xlines) and launch HL drafting
 (defun c:HL-XLINES ( / lay )
   (setq *HLMODE* 2
         lay      (if *WF-LAYER-HL* *WF-LAYER-HL* "01-HELP-LINE"))
   (if (boundp 'CadSetup:HL-SolveLayer)
     (CadSetup:HL-SolveLayer lay)
   )
-  (princ "\n[XX] HLMODE set to 2 (Infinite Xlines).")
+  (princ "\n[HL-XLINES] HLMODE set to 2 (Infinite Xlines).")
   (c:HL)
   (princ)
 )
-
-(defun c:XX () (c:HL-XLINES))
 
 ;;; --------------------------------------------------------------------------
 ;;; MAIN WORKFLOW COMMAND: 1 / HL

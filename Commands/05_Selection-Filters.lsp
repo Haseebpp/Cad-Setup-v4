@@ -49,9 +49,9 @@
 (defun c:SCIR  () (CadSetup:FilterSelection "SCIR"  "CIRCLE,ARC"       T   "Circle/Arc"))
 (defun c:SCIRI () (CadSetup:FilterSelection "SCIRI" "CIRCLE,ARC"       nil "Circle/Arc"))
 
-;; Viewports: SV = Isolate, SVI = Exclude
-(defun c:SV   () (CadSetup:FilterSelection "SV"   "VIEWPORT"           T   "Viewport"))
-(defun c:SVI  () (CadSetup:FilterSelection "SVI"  "VIEWPORT"           nil "Viewport"))
+;; Viewports: SVP = Isolate, SVPI = Exclude
+(defun c:SVP  () (CadSetup:FilterSelection "SVP"  "VIEWPORT"           T   "Viewport"))
+(defun c:SVPI () (CadSetup:FilterSelection "SVPI" "VIEWPORT"           nil "Viewport"))
 
 ;; Tables: STB = Isolate, STBI = Exclude
 (defun c:STB  () (CadSetup:FilterSelection "STB"  "TABLE"              T   "Table"))

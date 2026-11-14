@@ -254,7 +254,7 @@ Use this pattern when the command delegates to a native AutoCAD interactive comm
 
    - `04_Layout-Views.lsp`: Sheet, viewport, and presentation tools (`TS`, `A3SERIES`, `VPCLIPRECTANGLE`, `VR`, `ZOOMANNO`, `ZA`)
 
-   - `05_Selection-Filters.lsp`: Fast entity filters (`ssget` wrappers: `SR`, `SL`, `ST`, `SB`, `SX`, `SHT`/`SH`, `SP`, `SLN`, `SCIR`, `SV`, `STB`, `SW`, `SA`)
+   - `05_Selection-Filters.lsp`: Fast entity filters (`ssget` wrappers: `SR`, `SL`, `ST`, `SB`, `SX`, `SHT`/`SH`, `SP`, `SLN`, `SCIR`, `SVP`, `STB`, `SW`, `SA`)
 
    - `06_Utilities.lsp`: Calculation, cleanup, repair (`TC`, `BBOX`, `CTRANS`, `CDIMSCALE`/`CSCALE`/`CANNO`, `FL0`, `HSCALE`/`HSC`, `HROT`/`HR`, `WF`, `WR`, `LST`)
 

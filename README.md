@@ -244,7 +244,7 @@ Isolate or exclude entity categories in one click without touching layer freeze/
 
 | **Circles & Arcs** | `SCIR` | `SCIRI` |
 
-| **Viewports** | `SV` | `SVI` |
+| **Viewports** | `SVP` | `SVPI` |
 
 | **Tables** | `STB` | `STBI` |
 
@@ -482,7 +482,7 @@ Cad-Setup-v4/
 
 │   ├── 04_Layout-Views.lsp     # Layout & presentation tools (TS, VR, A3SERIES, ZOOMANNO/ZA)
 
-│   ├── 05_Selection-Filters.lsp# Instant entity filters (SR, SL, ST, SB, SX, SHT/SH, SP, SLN, SCIR, SV, STB, SW, SA)
+│   ├── 05_Selection-Filters.lsp# Instant entity filters (SR, SL, ST, SB, SX, SHT/SH, SP, SLN, SCIR, SVP, STB, SW, SA)
 
 │   ├── 06_Utilities.lsp        # Geometry utilities (TC, BBOX, CTRANS, CDIMSCALE/CSCALE, FL0, PUA, LST)
 

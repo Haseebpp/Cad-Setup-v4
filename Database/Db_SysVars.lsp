@@ -33,6 +33,7 @@
   ("CMDECHO"            0          "Drafting"    "Suppresses command line echoes during automation")
   ("PICKFIRST"          1          "Drafting"    "Noun/verb selection enabled (select before command)")
   ("PICKADD"            0          "Drafting"    "Standard selection (hold Shift to add to selection set)")
+  ("MBUTTONORBIT"       0          "Drafting"    "Disable Shift+Middle-Click 3D Orbit (0=Off, 1=On; requires scripts/Register-MButtonOrbit.ps1)")
   ("HIGHLIGHT"          1          "Drafting"    "Highlight selected drawing entities")
   ("LEGACYCTRLPICK"     0          "Drafting"    "Enable Ctrl+Click subentity and segment selection")
   ("FILEDIA"            1          "Drafting"    "Force standard Windows file navigation dialogs")

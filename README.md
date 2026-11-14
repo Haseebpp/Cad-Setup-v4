@@ -274,6 +274,8 @@ Isolate or exclude entity categories in one click without touching layer freeze/
 
 * **`BBOX`**: Draw automatic bounding box rectangle around selected geometry in current UCS.
 
+* **`SHRINKWRAPVIS`** / **`WRAP`**: Generate a tight concave-hull and inward corridor-snapped shrinkwrap boundary around complex mixed geometry.
+
 * **`FL0`**: Safely flatten 3D geometry to `Z = 0.0`.
 
 * **`PUA` / `QA`**: Deep purge (All, RegApps, Zero-length geometry, Empty text) + drawing database audit.
@@ -420,6 +422,8 @@ Located in [Core/01_Undo-Manager.lsp](file:///d:/HASEEB/Cad-Setup-v4/Core/01_Und
 
 | `BBOX` | Bounding Box | Draws rectangular bounding box in current UCS |
 
+| `WRAP` | `SHRINKWRAPVIS` | Visual concave-hull & inward corridor-snap boundary shrinkwrap |
+
 | `FL0` | Flatten | Flattens selected objects or modelspace to `Z=0` |
 
 | `PUA` / `QA` | Purge / Audit | Deep database purge & audit |
@@ -489,6 +493,8 @@ Cad-Setup-v4/
 │   ├── 07_Copy-Utilities.lsp   # Smart duplication & cloning (CIP, COPYSEG/CS)
 
 │   ├── 08_Dynamic-Stretch.lsp  # Multi-boundary dynamic stretch (DYNSTRETCH/DS)
+
+│   ├── 09_Shrinkwrap.lsp       # Visual concave-hull & corridor-snap shrinkwrap (SHRINKWRAPVIS/WRAP)
 
 │   └── 99_Aliases.lsp          # Production ergonomic command aliases & macros
 

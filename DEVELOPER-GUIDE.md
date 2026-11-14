@@ -262,6 +262,8 @@ Use this pattern when the command delegates to a native AutoCAD interactive comm
 
    - `08_Dynamic-Stretch.lsp`: Multi-boundary dynamic stretch (`DYNSTRETCH`, `DS`)
 
+   - `09_Shrinkwrap.lsp`: Concave-hull & corridor-snap boundary shrinkwrap (`SHRINKWRAPVIS`, `WRAP`)
+
    - `99_Aliases.lsp`: Native AutoCAD alias remappings and macro actions
 
 2. Paste either **Pattern A** (Batch) or **Pattern B** (Interactive) into the file.

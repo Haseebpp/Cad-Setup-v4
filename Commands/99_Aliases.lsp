@@ -164,18 +164,19 @@
 )
 
 ;;; --- MODIFY & CLEANUP -----------------------------------------------------
-(defun c:S   () (initcommandversion) (command "_.STRETCH")   (princ)) ; S   -> Stretch crossing-window selection
-(defun c:DS  () (c:DYNSTRETCH))                                       ; DS  -> Multi-boundary dynamic stretch (DYNSTRETCH)
-(defun c:O   () (initcommandversion) (command "_.OFFSET")    (princ)) ; O   -> Offset curves by parallel distance
-(defun c:TR  () (initcommandversion) (command "_.TRIM")      (princ)) ; TR  -> Trim geometry to cutting edges
-(defun c:EX  () (initcommandversion) (command "_.EXTEND")    (princ)) ; EX  -> Extend geometry to boundary edges
-(defun c:F   () (initcommandversion) (command "_.FILLET")    (princ)) ; F   -> Round/fillet corners
-(defun c:CH  () (initcommandversion) (command "_.CHAMFER")   (princ)) ; CH  -> Bevel/chamfer edges
-(defun c:J   () (initcommandversion) (command "_.JOIN")      (princ)) ; J   -> Join collinear/coincident entities
-(defun c:X   () (initcommandversion) (command "_.EXPLODE")   (princ)) ; X   -> Break compound object into primitives
-(defun c:E   () (initcommandversion) (command "_.ERASE")     (princ)) ; E   -> Delete selected objects
-(defun c:OK  () (initcommandversion) (command "_.OVERKILL")  (princ)) ; OK  -> Clean duplicate/overlapping lines
-(defun c:BR  () (initcommandversion) (command "_.BREAK")     (princ)) ; BR  -> Break entity between 2 pick points
+(defun c:S    () (initcommandversion) (command "_.STRETCH")   (princ)) ; S    -> Stretch crossing-window selection
+(defun c:DS   () (c:DYNSTRETCH))                                      ; DS   -> Multi-boundary dynamic stretch (DYNSTRETCH)
+(defun c:WRAP () (c:SHRINKWRAPVIS))                                   ; WRAP -> Visual concave-hull & corridor-snap shrinkwrap
+(defun c:O    () (initcommandversion) (command "_.OFFSET")    (princ)) ; O    -> Offset curves by parallel distance
+(defun c:TR   () (initcommandversion) (command "_.TRIM")      (princ)) ; TR   -> Trim geometry to cutting edges
+(defun c:EX   () (initcommandversion) (command "_.EXTEND")    (princ)) ; EX   -> Extend geometry to boundary edges
+(defun c:F    () (initcommandversion) (command "_.FILLET")    (princ)) ; F    -> Round/fillet corners
+(defun c:CH   () (initcommandversion) (command "_.CHAMFER")   (princ)) ; CH   -> Bevel/chamfer edges
+(defun c:J    () (initcommandversion) (command "_.JOIN")      (princ)) ; J    -> Join collinear/coincident entities
+(defun c:X    () (initcommandversion) (command "_.EXPLODE")   (princ)) ; X    -> Break compound object into primitives
+(defun c:E    () (initcommandversion) (command "_.ERASE")     (princ)) ; E    -> Delete selected objects
+(defun c:OK   () (initcommandversion) (command "_.OVERKILL")  (princ)) ; OK   -> Clean duplicate/overlapping lines
+(defun c:BR   () (initcommandversion) (command "_.BREAK")     (princ)) ; BR   -> Break entity between 2 pick points
 
 ;; Modern & Legacy Safe Break-At-Point
 (defun c:BR1 (/ *error*)                                  ; BR1 -> Split curve at a single pick point

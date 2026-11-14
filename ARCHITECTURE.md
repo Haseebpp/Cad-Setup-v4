@@ -172,6 +172,8 @@ d:\HASEEB\Cad-Setup-v4\
 
 │   ├── 08_Dynamic-Stretch.lsp  ; Multi-boundary dynamic stretch (DYNSTRETCH, DS)
 
+│   ├── 09_Shrinkwrap.lsp       ; Visual concave-hull & corridor-snap shrinkwrap (SHRINKWRAPVIS, WRAP)
+
 │   └── 99_Aliases.lsp          ; AutoCAD command alias mapping & atomic macros (ROR, SCR, BF, BB, ME, JJ, PC, PO, FF, CC, BR1)
 
 └── UI/

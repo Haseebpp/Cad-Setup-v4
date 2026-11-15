@@ -410,7 +410,9 @@ Located in [Core/01_Undo-Manager.lsp](file:///d:/HASEEB/Cad-Setup-v4/Core/01_Und
 
 | `SCR` | Scale | Scales objects with reference (`_R`) pre-selected |
 
-| `ME` | Mirror | Mirrors objects and deletes original source geometry |
+| `ME` | Mirror | Mirrors objects and deletes original source geometry |
+
+| `FH` / `FV` | Mirror | Flips selection horizontally / vertically across WCS axis at bounding-box center |
 
 | `BF` / `BB` | Draworder | Bring to Front / Send to Back |
 
@@ -488,7 +490,7 @@ Cad-Setup-v4/
 
 │   ├── 05_Selection-Filters.lsp# Instant entity filters (SR, SL, ST, SB, SX, SHT/SH, SP, SLN, SCIR, SVP, STB, SW, SA)
 
-│   ├── 06_Utilities.lsp        # Geometry utilities (TC, BBOX, CTRANS, CDIMSCALE/CSCALE, FL0, PUA, LST)
+│   ├── 06_Utilities.lsp        # Geometry utilities (TC, BBOX, FH, FV, CTRANS, CDIMSCALE/CSCALE, FL0, PUA, LST)
 
 │   ├── 07_Copy-Utilities.lsp   # Smart duplication & cloning (CIP, COPYSEG/CS)
 

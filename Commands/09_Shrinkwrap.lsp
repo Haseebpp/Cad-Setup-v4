@@ -959,23 +959,23 @@
 
 ;; sw:prompt-tightness - Prompts for tightness preset; returns (factor . isConvex)
 (defun sw:prompt-tightness ( / kw )
-  (initget "1 2 3 4 5 Convex Loose Medium Tight Ultra-tight")
-  (setq kw (getkword "\n[SHRINKWRAP] Tightness [1-Convex/2-Loose/3-Medium/4-Tight/5-Ultra-tight] <4>: "))
-  (if (null kw) (setq kw "4"))
+  (initget "Convex Loose Medium Tight Ultra-tight")
+  (setq kw (getkword "\nSpecify tightness [Convex/Loose/Medium/Tight/Ultra-tight] <Tight>: "))
+  (if (null kw) (setq kw "Tight"))
   (setq kw (strcase kw))
   (cond
-    ((or (= kw "1") (= kw "CONVEX"))      (cons 100.0 T))
-    ((or (= kw "2") (= kw "LOOSE"))       (cons 5.0   nil))
-    ((or (= kw "3") (= kw "MEDIUM"))      (cons 3.0   nil))
-    ((or (= kw "5") (= kw "ULTRA-TIGHT")) (cons 1.1   nil))
-    (t                                    (cons 1.8   nil))
+    ((= kw "CONVEX")      (cons 100.0 T))
+    ((= kw "LOOSE")       (cons 5.0   nil))
+    ((= kw "MEDIUM")      (cons 3.0   nil))
+    ((= kw "ULTRA-TIGHT") (cons 1.1   nil))
+    (t                    (cons 1.8   nil))
   )
 )
 
 ;; sw:prompt-speed - Prompts for animation delay; returns delay in ms (0 = disabled)
 (defun sw:prompt-speed ( / kw )
   (initget "None Fast Medium Slow")
-  (setq kw (getkword "\n[SHRINKWRAP] Animation speed [None/Fast/Medium/Slow] <None>: "))
+  (setq kw (getkword "\nSpecify animation speed [None/Fast/Medium/Slow] <None>: "))
   (if (null kw) (setq kw "None"))
   (setq kw (strcase kw))
   (cond
@@ -1819,7 +1819,7 @@
                             (vl-catch-all-apply 'vla-Delete (list polyObj))
                           )
                           (setq polyObj nil)
-                          (princ "\n[SHRINKWRAP] WARN: Could not close non-degenerate boundary cleanly. Try Tightness [3] or [2].")
+                          (princ "\n[SHRINKWRAP] WARN: Could not close non-degenerate boundary cleanly. Try Medium or Loose tightness.")
                         )
                         (progn
                           ;; Create or finalize hull polyline
@@ -1838,7 +1838,7 @@
                           ;; 7. Optional inward corridor shrinkwrap refinement (Convex mode)
                           (if (and isConvex
                                    (sw:prompt-yes-no
-                                     "\n[SHRINKWRAP] Convex boundary completed. Further shrink inward? [Yes/No] <Yes>: "
+                                     "\nConvex boundary completed. Further shrink inward? [Yes/No] <Yes>: "
                                      T))
                             (progn
                               (princ "\n[SHRINKWRAP] Indexing spatial lattice...")
@@ -1884,7 +1884,7 @@
                                    (= (type polyObj) 'VLA-OBJECT)
                                    (not (vlax-erased-p polyObj))
                                    (sw:prompt-yes-no
-                                     "\n[SHRINKWRAP] Fit smooth circular arcs through vertices? [Yes/No] <No>: "
+                                     "\nFit smooth circular arcs through vertices? [Yes/No] <No>: "
                                      nil))
                             (progn
                               (setq polyEnt (vl-catch-all-apply 'vlax-vla-object->ename (list polyObj)))

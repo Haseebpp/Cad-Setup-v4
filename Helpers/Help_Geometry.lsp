@@ -129,6 +129,47 @@
   )
 )
 
+;; CadSetup:GetBoundingBoxWcs - Collective Bounding Box in World Coordinates (WCS)
+;; Accepts a PICKSET or a list of ENAME / VLA-OBJECTs and computes the tightest
+;; overall WCS bounding box: ((minX minY minZ) (maxX maxY maxZ)) or nil.
+(defun CadSetup:GetBoundingBoxWcs (items / entList i bbox pMin pMax minZVal maxZVal
+                                           minX minY minZ maxX maxY maxZ)
+  (setq entList
+    (cond
+      ((and items (= (type items) 'PICKSET) (> (sslength items) 0))
+       (setq i (sslength items) entList nil)
+       (while (> i 0)
+         (setq i (1- i)
+               entList (cons (ssname items i) entList))
+       )
+       entList
+      )
+      ((and items (listp items)) items)
+      (t nil)
+    )
+  )
+  (foreach ent entList
+    (if (setq bbox (CadSetup:GetBoundingBox ent))
+      (progn
+        (setq pMin    (car bbox)
+              pMax    (cadr bbox)
+              minZVal (if (caddr pMin) (caddr pMin) 0.0)
+              maxZVal (if (caddr pMax) (caddr pMax) 0.0))
+        (setq minX (if minX (min minX (car pMin))  (car pMin))
+              minY (if minY (min minY (cadr pMin)) (cadr pMin))
+              minZ (if minZ (min minZ minZVal)    minZVal)
+              maxX (if maxX (max maxX (car pMax))  (car pMax))
+              maxY (if maxY (max maxY (cadr pMax)) (cadr pMax))
+              maxZ (if maxZ (max maxZ maxZVal)    maxZVal))
+      )
+    )
+  )
+  (if minX
+    (list (list minX minY minZ) (list maxX maxY maxZ))
+    nil
+  )
+)
+
 ;; ===========================================================================
 ;; CURVE LENGTH INQUIRIES
 ;; ===========================================================================

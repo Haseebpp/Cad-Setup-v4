@@ -2,7 +2,7 @@
 ;;; 06_Utilities.lsp - Drawing Cleanup, Measurement, System Fixes & Utilities
 ;;; Layer: Commands (Priority 06)
 ;;; Author   : Haseeb
-;;; Commands : TC, BBOX, CTRANS, CDIMSCALE (CSCALE, CANNO, CDSCALE), FL0, HSCALE (HSC), HROT (HR), PUA (QA), FIXSELECT, FIXBOX, WF, WR, LOAD-STYLES (LST)
+;;; Commands : TC, BBOX, FH, FV, CTRANS, CDIMSCALE (CSCALE, CANNO, CDSCALE), FL0, HSCALE (HSC), HROT (HR), PUA (QA), FIXSELECT, FIXBOX, WF, WR, LOAD-STYLES (LST)
 ;;; ==========================================================================
 
 (vl-load-com)
@@ -79,6 +79,109 @@
   (setvar 'cmdecho oldCmd)
   (princ)
 )
+
+
+;;; --------------------------------------------------------------------------
+;;; 2b. WORLD-AXIS BOUNDING-CENTER FLIP (FH, FV)
+;;; --------------------------------------------------------------------------
+
+;; _CadSetup-FlipWorld - Mirrors unlocked selection around collective WCS bounding center
+;; axis: 'FLIP_H (mirror across World Y-axis) or 'FLIP_V (mirror across World X-axis)
+(defun _CadSetup-FlipWorld (axis cmdName / *error* oldCmd ss i ent layRec unlockedEnts
+                                           skippedLocked bbox mid pt2 obj newObj delRes count)
+  (defun *error* (msg)
+    (if oldCmd (setvar 'cmdecho oldCmd))
+    (if (boundp 'CadSetup:UndoReset) (CadSetup:UndoReset))
+    (if (and msg (not (wcmatch (strcase msg t) "*cancel*,*quit*,*exit*")))
+      (princ (strcat "\n[" cmdName "] Error: " msg))
+    )
+    (princ)
+  )
+
+  (setq oldCmd (getvar 'cmdecho))
+  (setvar 'cmdecho 0)
+
+  (setq ss (ssget "_I"))
+  (if (not ss)
+    (progn
+      (princ (strcat "\nSelect objects to flip "
+                     (if (eq axis 'FLIP_H) "horizontally" "vertically")
+                     " [" cmdName "]: "))
+      (setq ss (ssget "_:L"))
+    )
+  )
+
+  (if (and ss (> (sslength ss) 0))
+    (progn
+      (sssetfirst nil nil)
+      (setq i 0 skippedLocked 0 unlockedEnts nil)
+      (while (< i (sslength ss))
+        (setq ent    (ssname ss i)
+              layRec (tblsearch "LAYER" (cdr (assoc 8 (entget ent)))))
+        (if (and layRec (= (logand (cdr (assoc 70 layRec)) 4) 4))
+          (setq skippedLocked (1+ skippedLocked))
+          (setq unlockedEnts (cons ent unlockedEnts))
+        )
+        (setq i (1+ i))
+      )
+      (setq unlockedEnts (reverse unlockedEnts))
+
+      (if unlockedEnts
+        (progn
+          (setq bbox (CadSetup:GetBoundingBoxWcs unlockedEnts))
+          (if bbox
+            (progn
+              (setq mid (CadSetup:MidPoint (car bbox) (cadr bbox))
+                    pt2 (if (eq axis 'FLIP_H)
+                          (list (car mid) (+ (cadr mid) 100.0) (caddr mid))
+                          (list (+ (car mid) 100.0) (cadr mid) (caddr mid))))
+              (if (boundp 'CadSetup:UndoStart) (CadSetup:UndoStart))
+              (setq count 0)
+              (foreach ent unlockedEnts
+                (setq obj (vl-catch-all-apply 'vlax-ename->vla-object (list ent)))
+                (if (and (not (vl-catch-all-error-p obj)) obj)
+                  (progn
+                    (setq newObj (vl-catch-all-apply 'vla-mirror
+                                   (list obj (vlax-3d-point mid) (vlax-3d-point pt2))))
+                    (if (not (vl-catch-all-error-p newObj))
+                      (progn
+                        (setq delRes (vl-catch-all-apply 'vla-delete (list obj)))
+                        (if (vl-catch-all-error-p delRes)
+                          (vl-catch-all-apply 'vla-delete (list newObj))
+                          (progn
+                            (vl-catch-all-apply 'vla-update (list newObj))
+                            (setq count (1+ count))
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+              (if (boundp 'CadSetup:UndoEnd) (CadSetup:UndoEnd))
+              (princ (strcat "\n[" cmdName "] Flipped " (itoa count) " object(s) around WCS bounding center."
+                             (if (> skippedLocked 0)
+                               (strcat " (" (itoa skippedLocked) " on locked layer(s) skipped.)")
+                               "")))
+            )
+            (princ (strcat "\n[" cmdName "] Could not calculate bounding box for selected objects."))
+          )
+        )
+        (princ (strcat "\n[" cmdName "] All selected objects are on locked layers."))
+      )
+    )
+    (princ (strcat "\n[" cmdName "] No objects selected."))
+  )
+
+  (setvar 'cmdecho oldCmd)
+  (princ)
+)
+
+;; FH : Flip Horizontally across World Y-axis through selection bounding center
+(defun c:FH () (_CadSetup-FlipWorld 'FLIP_H "FH"))
+
+;; FV : Flip Vertically across World X-axis through selection bounding center
+(defun c:FV () (_CadSetup-FlipWorld 'FLIP_V "FV"))
 
 
 ;;; --------------------------------------------------------------------------
